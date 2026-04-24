@@ -1,0 +1,50 @@
+services:
+  - type: web
+    name: tertitask-api
+    env: python
+    buildCommand: pip install -r requirements.txt && python manage.py migrate
+    startCommand: gunicorn tertitask.wsgi
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: tertitask-db
+          property: connectionString
+      - key: ALLOWED_HOSTS
+        value: tertitask-api.onrender.com
+      - key: CORS_ALLOWED_ORIGINS
+        value: https://tertitask.vercel.app
+      - key: FIREBASE_CREDENTIALS_JSON
+        sync: false
+      - key: PAYSTACK_SECRET_KEY
+        sync: false
+      - key: PAYSTACK_WEBHOOK_SECRET
+        sync: false
+      - key: R2_ACCOUNT_ID
+        sync: false
+      - key: R2_ACCESS_KEY_ID
+        sync: false
+      - key: R2_SECRET_ACCESS_KEY
+        sync: false
+      - key: R2_PUBLIC_BUCKET
+        value: tertitask-public
+      - key: R2_DELIVERIES_BUCKET
+        value: tertitask-deliveries
+      - key: R2_PUBLIC_BASE_URL
+        sync: false
+      - key: PLATFORM_FEE_PERCENT
+        value: "10"
+      - key: CLEARING_DAYS
+        value: "7"
+      - key: AUTO_APPROVE_DAYS
+        value: "3"
+      - key: MIN_WITHDRAWAL_AMOUNT
+        value: "5000"
+      - key: DEBUG
+        value: "False"
+
+databases:
+  - name: tertitask-db
+    databaseName: tertitask
+    user: tertitask

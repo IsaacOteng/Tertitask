@@ -1,0 +1,13 @@
+User-agent: *
+Allow: /
+Allow: /browse
+Allow: /gig/
+Allow: /freelancer/
+Disallow: /me/
+Disallow: /orders/
+Disallow: /sales/
+Disallow: /earnings/
+Disallow: /order/
+Disallow: /onboarding
+
+Sitemap: https://tertitask-web.vercel.app/sitemap.xml
