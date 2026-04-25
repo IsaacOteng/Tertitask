@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../lib/api'
-import AvatarUpload from '../components/AvatarUpload'
-import { Briefcase, Users } from 'lucide-react'
+import AvatarUpload from './AvatarUpload'
+import { Briefcase, Users, Camera, Loader2, ImagePlus } from 'lucide-react'
 
 const FREELANCER_STEPS = ['About you', 'Contact', 'Skills']
 const CLIENT_STEPS = ['About you', 'Contact']
@@ -28,11 +28,7 @@ function StepIndicator({ current, steps }) {
           >
             {i + 1}
           </div>
-          <span
-            className={`text-fs-small font-sans ${
-              i === current ? 'text-ink font-semibold' : 'text-ink-muted'
-            }`}
-          >
+          <span className={`text-fs-small font-sans ${i === current ? 'text-ink font-semibold' : 'text-ink-muted'}`}>
             {label}
           </span>
           {i < steps.length - 1 && (
@@ -73,7 +69,6 @@ function Select({ children, ...props }) {
   )
 }
 
-// ── Role selection ────────────────────────────────────────────────────
 function RoleSelect({ onSelect }) {
   return (
     <div className="flex flex-col gap-5">
@@ -115,50 +110,104 @@ function RoleSelect({ onSelect }) {
   )
 }
 
-// ── Step: About (freelancer) ──────────────────────────────────────────
-function StepAboutFreelancer({ form, setForm }) {
+function CoverUploadInline({ onUploaded }) {
+  const inputRef = useRef(null)
+  const [uploading, setUploading] = useState(false)
+  const [preview, setPreview] = useState(null)
+
+  async function handleFile(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const ALLOWED = ['image/jpeg', 'image/png', 'image/webp']
+    if (!ALLOWED.includes(file.type)) return
+    if (file.size > 8 * 1024 * 1024) return
+
+    setUploading(true)
+    setPreview(URL.createObjectURL(file))
+    try {
+      const { upload_url, public_url } = await api.post('/uploads/presign/', {
+        purpose: 'cover',
+        content_type: file.type,
+        size_bytes: file.size,
+      })
+      await fetch(upload_url, {
+        method: 'PUT',
+        headers: { 'Content-Type': file.type },
+        body: file,
+      })
+      onUploaded(public_url)
+    } catch (err) {
+      console.error('Cover upload failed:', err)
+      setPreview(null)
+    } finally {
+      setUploading(false)
+      if (inputRef.current) inputRef.current.value = ''
+    }
+  }
+
+  return (
+    <div>
+      <FieldLabel>Cover photo (optional)</FieldLabel>
+      <p className="text-fs-tiny text-ink-muted mb-2 -mt-1">A banner image shown at the top of your profile.</p>
+      <div
+        className="relative w-full h-28 rounded-input border border-dashed border-line bg-bg-subtle overflow-hidden cursor-pointer group"
+        onClick={() => inputRef.current?.click()}
+      >
+        {preview ? (
+          <img src={preview} alt="Cover preview" className="w-full h-full object-cover" />
+        ) : (
+          <div className="flex flex-col items-center justify-center h-full gap-1.5 text-ink-muted group-hover:text-ink-soft transition-colors">
+            <ImagePlus size={22} />
+            <span className="text-fs-tiny font-medium">Click to upload cover photo</span>
+          </div>
+        )}
+        {uploading && (
+          <div className="absolute inset-0 bg-ink/40 flex items-center justify-center">
+            <Loader2 size={20} className="text-white animate-spin" />
+          </div>
+        )}
+        {!uploading && preview && (
+          <div className="absolute inset-0 bg-ink/0 group-hover:bg-ink/30 transition-colors flex items-center justify-center">
+            <Camera size={20} className="text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+          </div>
+        )}
+      </div>
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        className="sr-only"
+        onChange={handleFile}
+      />
+    </div>
+  )
+}
+
+function StepAboutFreelancer({ form, setForm, onCoverUploaded }) {
   const bio = form.bio || ''
   return (
     <div className="flex flex-col gap-5">
       <div className="flex justify-center py-2">
         <AvatarUpload size={24} />
       </div>
+      <CoverUploadInline onUploaded={onCoverUploaded} />
       <div>
         <FieldLabel required>Full name</FieldLabel>
-        <Input
-          value={form.full_name}
-          onChange={(e) => setForm({ ...form, full_name: e.target.value })}
-          placeholder="Your full name"
-        />
+        <Input value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} placeholder="Your full name" />
       </div>
       <div>
         <FieldLabel required>University</FieldLabel>
-        <Input
-          value={form.university}
-          onChange={(e) => setForm({ ...form, university: e.target.value })}
-          placeholder="e.g. GCTU, UG, KNUST"
-        />
+        <Input value={form.university} onChange={(e) => setForm({ ...form, university: e.target.value })} placeholder="e.g. GCTU, UG, KNUST" />
       </div>
       <div>
         <FieldLabel required>Programme</FieldLabel>
-        <Input
-          value={form.program}
-          onChange={(e) => setForm({ ...form, program: e.target.value })}
-          placeholder="e.g. BSc Computer Science"
-        />
+        <Input value={form.program} onChange={(e) => setForm({ ...form, program: e.target.value })} placeholder="e.g. BSc Computer Science" />
       </div>
       <div>
         <FieldLabel>Year of study</FieldLabel>
-        <Select
-          value={form.year_of_study || ''}
-          onChange={(e) =>
-            setForm({ ...form, year_of_study: e.target.value ? Number(e.target.value) : null })
-          }
-        >
+        <Select value={form.year_of_study || ''} onChange={(e) => setForm({ ...form, year_of_study: e.target.value ? Number(e.target.value) : null })}>
           <option value="">Select year</option>
-          {YEAR_OPTIONS.map((y) => (
-            <option key={y} value={y}>Year {y}</option>
-          ))}
+          {YEAR_OPTIONS.map((y) => <option key={y} value={y}>Year {y}</option>)}
         </Select>
       </div>
       <div>
@@ -171,38 +220,28 @@ function StepAboutFreelancer({ form, setForm }) {
             rows={3}
             className="w-full px-3 py-2 border border-line rounded-input text-fs-body font-sans text-ink bg-bg placeholder:text-ink-muted focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand transition resize-none"
           />
-          <span className="absolute bottom-2 right-3 text-fs-tiny text-ink-muted">
-            {bio.length}/280
-          </span>
+          <span className="absolute bottom-2 right-3 text-fs-tiny text-ink-muted">{bio.length}/280</span>
         </div>
       </div>
     </div>
   )
 }
 
-// ── Step: About (client) ──────────────────────────────────────────────
-function StepAboutClient({ form, setForm }) {
+function StepAboutClient({ form, setForm, onCoverUploaded }) {
   const bio = form.bio || ''
   return (
     <div className="flex flex-col gap-5">
       <div className="flex justify-center py-2">
         <AvatarUpload size={24} />
       </div>
+      <CoverUploadInline onUploaded={onCoverUploaded} />
       <div>
         <FieldLabel required>Full name</FieldLabel>
-        <Input
-          value={form.full_name}
-          onChange={(e) => setForm({ ...form, full_name: e.target.value })}
-          placeholder="Your full name"
-        />
+        <Input value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} placeholder="Your full name" />
       </div>
       <div>
         <FieldLabel>Organisation / company (optional)</FieldLabel>
-        <Input
-          value={form.university}
-          onChange={(e) => setForm({ ...form, university: e.target.value })}
-          placeholder="e.g. GCTU, Startup name, Freelance"
-        />
+        <Input value={form.university} onChange={(e) => setForm({ ...form, university: e.target.value })} placeholder="e.g. GCTU, Startup name, Freelance" />
       </div>
       <div>
         <FieldLabel>About you (optional)</FieldLabel>
@@ -214,22 +253,18 @@ function StepAboutClient({ form, setForm }) {
             rows={3}
             className="w-full px-3 py-2 border border-line rounded-input text-fs-body font-sans text-ink bg-bg placeholder:text-ink-muted focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand transition resize-none"
           />
-          <span className="absolute bottom-2 right-3 text-fs-tiny text-ink-muted">
-            {bio.length}/280
-          </span>
+          <span className="absolute bottom-2 right-3 text-fs-tiny text-ink-muted">{bio.length}/280</span>
         </div>
       </div>
     </div>
   )
 }
 
-// ── Step: Contact ─────────────────────────────────────────────────────
 function StepContact({ form, setForm }) {
   const links = form.profile_links || []
 
   function updateLink(idx, field, value) {
-    const next = links.map((l, i) => (i === idx ? { ...l, [field]: value } : l))
-    setForm({ ...form, profile_links: next })
+    setForm({ ...form, profile_links: links.map((l, i) => (i === idx ? { ...l, [field]: value } : l)) })
   }
   function addLink() {
     if (links.length >= 5) return
@@ -243,21 +278,11 @@ function StepContact({ form, setForm }) {
     <div className="flex flex-col gap-5">
       <div>
         <FieldLabel>Phone number</FieldLabel>
-        <Input
-          type="tel"
-          value={form.phone}
-          onChange={(e) => setForm({ ...form, phone: e.target.value })}
-          placeholder="+233 50 123 4567"
-        />
+        <Input type="tel" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="+233 50 123 4567" />
       </div>
       <div>
         <FieldLabel>WhatsApp number (optional)</FieldLabel>
-        <Input
-          type="tel"
-          value={form.whatsapp}
-          onChange={(e) => setForm({ ...form, whatsapp: e.target.value })}
-          placeholder="Same as phone, or different"
-        />
+        <Input type="tel" value={form.whatsapp} onChange={(e) => setForm({ ...form, whatsapp: e.target.value })} placeholder="Same as phone, or different" />
       </div>
       <div>
         <FieldLabel required>Preferred contact method</FieldLabel>
@@ -287,25 +312,12 @@ function StepContact({ form, setForm }) {
 
       <div>
         <FieldLabel>Portfolio & profile links (optional)</FieldLabel>
-        <p className="text-fs-tiny text-ink-muted mb-2 -mt-1">
-          Add GitHub, Behance, LinkedIn, or your personal site.
-        </p>
+        <p className="text-fs-tiny text-ink-muted mb-2 -mt-1">Add GitHub, Behance, LinkedIn, or your personal site.</p>
         <div className="space-y-2">
           {links.map((link, idx) => (
             <div key={idx} className="flex gap-2">
-              <Input
-                value={link.title}
-                onChange={(e) => updateLink(idx, 'title', e.target.value)}
-                placeholder={LINK_PLACEHOLDER[idx] || 'Label'}
-                className="w-32 flex-none"
-              />
-              <Input
-                type="url"
-                value={link.url}
-                onChange={(e) => updateLink(idx, 'url', e.target.value)}
-                placeholder="https://..."
-                className="flex-1"
-              />
+              <Input value={link.title} onChange={(e) => updateLink(idx, 'title', e.target.value)} placeholder={LINK_PLACEHOLDER[idx] || 'Label'} className="w-32 flex-none" />
+              <Input type="url" value={link.url} onChange={(e) => updateLink(idx, 'url', e.target.value)} placeholder="https://..." className="flex-1" />
               <button
                 type="button"
                 onClick={() => removeLink(idx)}
@@ -316,11 +328,7 @@ function StepContact({ form, setForm }) {
             </div>
           ))}
           {links.length < 5 && (
-            <button
-              type="button"
-              onClick={addLink}
-              className="text-fs-small text-brand hover:underline font-medium"
-            >
+            <button type="button" onClick={addLink} className="text-fs-small text-brand hover:underline font-medium">
               + Add link
             </button>
           )}
@@ -330,7 +338,6 @@ function StepContact({ form, setForm }) {
   )
 }
 
-// ── Step: Skills (freelancer only) ───────────────────────────────────
 function StepSkills({ form, setForm, skillOptions, categoryOptions }) {
   const selected = form.skills || []
 
@@ -346,17 +353,10 @@ function StepSkills({ form, setForm, skillOptions, categoryOptions }) {
     <div className="flex flex-col gap-6">
       <div>
         <FieldLabel required>Primary category</FieldLabel>
-        <p className="text-fs-tiny text-ink-muted mb-2 -mt-1">
-          Pick the category that best describes what you offer.
-        </p>
-        <Select
-          value={form.primary_category}
-          onChange={(e) => setForm({ ...form, primary_category: e.target.value })}
-        >
+        <p className="text-fs-tiny text-ink-muted mb-2 -mt-1">Pick the category that best describes what you offer.</p>
+        <Select value={form.primary_category} onChange={(e) => setForm({ ...form, primary_category: e.target.value })}>
           <option value="">Select a category</option>
-          {categoryOptions.map((c) => (
-            <option key={c.slug} value={c.slug}>{c.label}</option>
-          ))}
+          {categoryOptions.map((c) => <option key={c.slug} value={c.slug}>{c.label}</option>)}
         </Select>
       </div>
       <div>
@@ -372,11 +372,9 @@ function StepSkills({ form, setForm, skillOptions, categoryOptions }) {
                 onClick={() => toggleSkill(skill)}
                 disabled={atLimit}
                 className={`px-3 h-8 rounded-full border text-fs-small font-sans transition ${
-                  isSelected
-                    ? 'bg-brand border-brand text-white'
-                    : atLimit
-                    ? 'border-line text-ink-muted opacity-40 cursor-not-allowed'
-                    : 'border-line text-ink-soft hover:border-brand/50 hover:text-ink'
+                  isSelected ? 'bg-brand border-brand text-white'
+                  : atLimit ? 'border-line text-ink-muted opacity-40 cursor-not-allowed'
+                  : 'border-line text-ink-soft hover:border-brand/50 hover:text-ink'
                 }`}
               >
                 {skill}
@@ -390,14 +388,14 @@ function StepSkills({ form, setForm, skillOptions, categoryOptions }) {
   )
 }
 
-// ── Main component ────────────────────────────────────────────────────
-export default function Onboarding() {
-  const { me, setMe, loading } = useAuth()
+export default function OnboardingModal() {
+  const { me, setMe } = useAuth()
   const navigate = useNavigate()
-  const [role, setRole] = useState(null) // null = not yet chosen
+  const [role, setRole] = useState(null)
   const [step, setStep] = useState(0)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState(null)
+  const [coverUrl, setCoverUrl] = useState('')
   const [skillOptions, setSkillOptions] = useState([])
   const [categoryOptions, setCategoryOptions] = useState([])
 
@@ -417,7 +415,6 @@ export default function Onboarding() {
     profile_links: [],
   })
 
-  // Prefill from me once loaded
   useEffect(() => {
     if (me) {
       setForm((prev) => ({
@@ -437,13 +434,6 @@ export default function Onboarding() {
       if (me.role) setRole(me.role)
     }
   }, [me])
-
-  // Redirect if already onboarded
-  useEffect(() => {
-    if (!loading && me?.onboarding_complete) {
-      navigate('/me', { replace: true })
-    }
-  }, [loading, me, navigate])
 
   useEffect(() => {
     api.get('/skills/').then(setSkillOptions).catch(() => {})
@@ -467,16 +457,14 @@ export default function Onboarding() {
     setSubmitting(true)
     setError(null)
     try {
-      const payload = { ...form, role, onboarding_complete: true }
+      const payload = { ...form, role, onboarding_complete: true, ...(coverUrl ? { cover_url: coverUrl } : {}) }
       const updated = await api.patch('/me/', payload)
       setMe(updated)
       navigate('/me', { replace: true })
     } catch (err) {
+      console.error('Onboarding submit failed:', err)
       if (err?.status === 403) {
-        setError(
-          'Authentication error: the server could not verify your session. ' +
-          'Please restart the Django server (it may need to pick up fresh credentials) and try again.',
-        )
+        setError('Session not ready yet — please refresh the page and try again.')
       } else {
         setError('Something went wrong. Please try again.')
       }
@@ -485,89 +473,82 @@ export default function Onboarding() {
     }
   }
 
-  if (loading) return null
-
-  // ── Role selection screen ─────────────────────────────────────────
-  if (!role) {
-    return (
-      <div className="min-h-screen bg-bg-subtle flex items-start justify-center pt-16 px-4">
-        <div className="w-full max-w-lg bg-bg rounded-card shadow-card p-8">
-          <h1 className="font-display text-fs-h2 text-ink mb-1">Welcome to TertiTask</h1>
-          <p className="font-sans text-fs-body text-ink-soft mb-8">
-            Let's get your account set up — it takes about 2 minutes.
-          </p>
-          <RoleSelect onSelect={(r) => setRole(r)} />
-        </div>
-      </div>
-    )
-  }
-
-  // ── Step form ─────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-bg-subtle flex items-start justify-center pt-16 px-4">
-      <div className="w-full max-w-lg bg-bg rounded-card shadow-card p-8">
-        <div className="flex items-center justify-between mb-1">
-          <h1 className="font-display text-fs-h2 text-ink">
-            {role === 'freelancer' ? 'Set up your freelancer profile' : 'Set up your account'}
-          </h1>
-        </div>
-        <p className="font-sans text-fs-body text-ink-soft mb-6">
-          {role === 'freelancer'
-            ? 'Tell clients about yourself and what you can offer.'
-            : 'A few details so freelancers know who they\'re working with.'}
-        </p>
-
-        <StepIndicator current={step} steps={steps} />
-
-        {role === 'freelancer' && step === 0 && <StepAboutFreelancer form={form} setForm={setForm} />}
-        {role === 'client' && step === 0 && <StepAboutClient form={form} setForm={setForm} />}
-        {step === 1 && <StepContact form={form} setForm={setForm} />}
-        {role === 'freelancer' && step === 2 && (
-          <StepSkills
-            form={form}
-            setForm={setForm}
-            skillOptions={skillOptions}
-            categoryOptions={categoryOptions}
-          />
-        )}
-
-        {error && (
-          <p className="mt-4 text-fs-small text-danger font-sans">{error}</p>
-        )}
-
-        <div className="flex justify-between mt-8">
-          {step > 0 ? (
-            <button
-              onClick={() => setStep(step - 1)}
-              className="h-[42px] px-4 rounded-input border border-line text-fs-body font-sans text-ink-soft hover:border-ink-soft transition"
-            >
-              Back
-            </button>
-          ) : (
-            <button
-              onClick={() => setRole(null)}
-              className="h-[42px] px-4 rounded-input border border-line text-fs-body font-sans text-ink-soft hover:border-ink-soft transition"
-            >
-              ← Change role
-            </button>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+      <div className="w-full max-w-lg bg-bg rounded-card shadow-card overflow-y-auto max-h-[90vh]">
+        <div className="p-8">
+          {/* Role selection */}
+          {!role && (
+            <>
+              <h1 className="font-display text-fs-h2 text-ink mb-1">Welcome to TertiTask</h1>
+              <p className="font-sans text-fs-body text-ink-soft mb-8">
+                Let's get your account set up — it takes about 2 minutes.
+              </p>
+              <RoleSelect onSelect={(r) => setRole(r)} />
+            </>
           )}
 
-          {step < lastStep ? (
-            <button
-              onClick={() => setStep(step + 1)}
-              disabled={!canAdvance()}
-              className="h-[42px] px-5 rounded-input bg-brand text-white font-sans text-fs-body font-medium hover:bg-brand-ink transition disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              Continue
-            </button>
-          ) : (
-            <button
-              onClick={handleSubmit}
-              disabled={!canAdvance() || submitting}
-              className="h-[42px] px-5 rounded-input bg-brand text-white font-sans text-fs-body font-medium hover:bg-brand-ink transition disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              {submitting ? 'Saving…' : 'Finish setup'}
-            </button>
+          {/* Step form */}
+          {role && (
+            <>
+              <div className="mb-1">
+                <h1 className="font-display text-fs-h2 text-ink">
+                  {role === 'freelancer' ? 'Set up your freelancer profile' : 'Set up your account'}
+                </h1>
+              </div>
+              <p className="font-sans text-fs-body text-ink-soft mb-6">
+                {role === 'freelancer'
+                  ? 'Tell clients about yourself and what you can offer.'
+                  : "A few details so freelancers know who they're working with."}
+              </p>
+
+              <StepIndicator current={step} steps={steps} />
+
+              {role === 'freelancer' && step === 0 && <StepAboutFreelancer form={form} setForm={setForm} onCoverUploaded={setCoverUrl} />}
+              {role === 'client' && step === 0 && <StepAboutClient form={form} setForm={setForm} onCoverUploaded={setCoverUrl} />}
+              {step === 1 && <StepContact form={form} setForm={setForm} />}
+              {role === 'freelancer' && step === 2 && (
+                <StepSkills form={form} setForm={setForm} skillOptions={skillOptions} categoryOptions={categoryOptions} />
+              )}
+
+              {error && <p className="mt-4 text-fs-small text-danger font-sans">{error}</p>}
+
+              <div className="flex justify-between mt-8">
+                {step > 0 ? (
+                  <button
+                    onClick={() => setStep(step - 1)}
+                    className="h-[42px] px-4 rounded-input border border-line text-fs-body font-sans text-ink-soft hover:border-ink-soft transition"
+                  >
+                    Back
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => setRole(null)}
+                    className="h-[42px] px-4 rounded-input border border-line text-fs-body font-sans text-ink-soft hover:border-ink-soft transition"
+                  >
+                    ← Change role
+                  </button>
+                )}
+
+                {step < lastStep ? (
+                  <button
+                    onClick={() => setStep(step + 1)}
+                    disabled={!canAdvance()}
+                    className="h-[42px] px-5 rounded-input bg-brand text-white font-sans text-fs-body font-medium hover:bg-brand-ink transition disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    Continue
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleSubmit}
+                    disabled={!canAdvance() || submitting}
+                    className="h-[42px] px-5 rounded-input bg-brand text-white font-sans text-fs-body font-medium hover:bg-brand-ink transition disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    {submitting ? 'Saving…' : 'Finish setup'}
+                  </button>
+                )}
+              </div>
+            </>
           )}
         </div>
       </div>

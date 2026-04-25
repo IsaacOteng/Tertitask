@@ -23,6 +23,8 @@ class User(AbstractBaseUser):
     email = models.EmailField(max_length=255, unique=True)
     full_name = models.CharField(max_length=120, blank=True)
     avatar_url = models.TextField(blank=True)
+    cover_url = models.TextField(blank=True)
+    cover_position_y = models.SmallIntegerField(default=50)
     phone = models.CharField(max_length=32, blank=True)
     whatsapp = models.CharField(max_length=32, blank=True)
     preferred_contact = models.CharField(
@@ -37,6 +39,12 @@ class User(AbstractBaseUser):
     primary_category = models.CharField(max_length=64, blank=True)
     skills = models.JSONField(default=list, blank=True)
     profile_links = models.JSONField(default=list, blank=True)
+    role = models.CharField(
+        max_length=16,
+        choices=[('freelancer', 'Freelancer'), ('client', 'Client')],
+        blank=True,
+        default='',
+    )
     onboarding_complete = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 

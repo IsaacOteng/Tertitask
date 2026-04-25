@@ -60,7 +60,7 @@ class PublicFreelancerSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = [
-            'id', 'full_name', 'avatar_url', 'university', 'program',
+            'id', 'full_name', 'avatar_url', 'cover_url', 'cover_position_y', 'university', 'program',
             'year_of_study', 'bio', 'primary_category', 'skills', 'profile_links',
             'preferred_contact', 'created_at', 'gigs',
         ]

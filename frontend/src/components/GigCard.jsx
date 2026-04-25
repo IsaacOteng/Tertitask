@@ -12,7 +12,7 @@ export default function GigCard({ gig }) {
   if (!gig) return null
   const { id, title, description, cover_url, price_basic, owner, delivery_days } = gig
 
-  const { user, signIn } = useAuth()
+  const { user, openSignIn } = useAuth()
   const { data: savedData } = useSaved()
   const saveGig = useSaveGig()
   const unsaveGig = useUnsaveGig()
@@ -22,7 +22,7 @@ export default function GigCard({ gig }) {
   function handleSave(e) {
     e.preventDefault()
     e.stopPropagation()
-    if (!user) { signIn(); return }
+    if (!user) { openSignIn(); return }
     if (isSaved) unsaveGig.mutate(id)
     else saveGig.mutate(id)
   }

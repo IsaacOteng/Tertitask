@@ -8,7 +8,7 @@ import {
 import { useGig, useFreelancer, useSaveGig, useUnsaveGig, useSaved } from '../hooks/useGigs'
 import { useAuth } from '../context/AuthContext'
 import { useDocumentTitle } from '../hooks/useDocumentTitle'
-import ContactModal from '../components/ContactModal'
+import ApplyModal from '../components/ApplyModal'
 import GigCard from '../components/GigCard'
 
 function avatarInitial(name) {
@@ -37,7 +37,7 @@ function formatDate(iso) {
   return new Date(iso).toLocaleDateString('en-GH', { month: 'long', year: 'numeric' })
 }
 
-function PricingPanel({ gig, tier, setTier, onOrder, onContact, isSaved, onSave }) {
+function PricingPanel({ gig, tier, setTier, onOrder, onContact, isSaved, onSave, isOwn }) {
   const hasPro = gig.price_pro != null
   const selectedPrice = tier === 'pro' && hasPro ? gig.price_pro : gig.price_basic
 
@@ -106,13 +106,15 @@ function PricingPanel({ gig, tier, setTier, onOrder, onContact, isSaved, onSave 
         >
           Order Now — {formatPrice(selectedPrice)}
         </button>
-        <button
-          onClick={onContact}
-          className="w-full h-11 rounded-input border border-line text-ink font-medium text-fs-small hover:border-brand hover:text-brand transition-colors flex items-center justify-center gap-2"
-        >
-          <MessageCircle size={15} />
-          Contact seller
-        </button>
+        {!isOwn && (
+          <button
+            onClick={onContact}
+            className="w-full h-11 rounded-input border border-line text-ink font-medium text-fs-small hover:border-brand hover:text-brand transition-colors flex items-center justify-center gap-2"
+          >
+            <MessageCircle size={15} />
+            Contact seller
+          </button>
+        )}
 
         {/* Save */}
         <button
@@ -139,7 +141,7 @@ function PricingPanel({ gig, tier, setTier, onOrder, onContact, isSaved, onSave 
 
 export default function GigDetail() {
   const { id } = useParams()
-  const { user, signIn } = useAuth()
+  const { user, me, openSignIn } = useAuth()
   const [tier, setTier] = useState('basic')
   const [showContact, setShowContact] = useState(false)
 
@@ -155,18 +157,18 @@ export default function GigDetail() {
   const isSaved = (savedData || []).some((s) => s.gig?.id === id)
 
   function handleSave() {
-    if (!user) { signIn(); return }
+    if (!user) { openSignIn(); return }
     if (isSaved) unsaveGig.mutate(id)
     else saveGig.mutate(id)
   }
 
   function handleContact() {
-    if (!user) { signIn(); return }
+    if (!user) { openSignIn(); return }
     setShowContact(true)
   }
 
   function handleOrder() {
-    if (!user) { signIn(); return }
+    if (!user) { openSignIn(); return }
     alert('Order creation is coming soon.')
   }
 
@@ -202,6 +204,7 @@ export default function GigDetail() {
   }
 
   const owner = gig.owner
+  const isOwnGig = me && owner && String(me.id) === String(owner.id)
   const ownerSkills = Array.isArray(owner?.skills) ? owner.skills.slice(0, 4) : []
   const categoryLabel = formatCategory(owner?.primary_category)
   const otherGigs = (freelancer?.gigs || []).filter((g) => g.id !== gig.id).slice(0, 4)
@@ -513,6 +516,7 @@ export default function GigDetail() {
                 onContact={handleContact}
                 isSaved={isSaved}
                 onSave={handleSave}
+                isOwn={isOwnGig}
               />
             </div>
           </div>
@@ -527,13 +531,15 @@ export default function GigDetail() {
         >
           Order — {formatPrice(tier === 'pro' && gig?.price_pro ? gig.price_pro : gig?.price_basic)}
         </button>
-        <button
-          onClick={handleContact}
-          className="h-11 px-4 rounded-input border border-line text-ink font-medium text-fs-small hover:border-brand hover:text-brand transition-colors flex items-center gap-2 shrink-0"
-        >
-          <MessageCircle size={15} />
-          Contact
-        </button>
+        {!isOwnGig && (
+          <button
+            onClick={handleContact}
+            className="h-11 px-4 rounded-input border border-line text-ink font-medium text-fs-small hover:border-brand hover:text-brand transition-colors flex items-center gap-2 shrink-0"
+          >
+            <MessageCircle size={15} />
+            Contact
+          </button>
+        )}
         <button
           onClick={handleSave}
           aria-label={isSaved ? 'Unsave' : 'Save'}
@@ -546,8 +552,12 @@ export default function GigDetail() {
       </div>
       <div className="lg:hidden h-20" />
 
-      {showContact && gig.owner && (
-        <ContactModal freelancer={gig.owner} onClose={() => setShowContact(false)} />
+      {showContact && (
+        <ApplyModal
+          gigId={gig.id}
+          contextTitle={gig.title}
+          onClose={() => setShowContact(false)}
+        />
       )}
     </div>
   )

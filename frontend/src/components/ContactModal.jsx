@@ -13,10 +13,11 @@ function avatarInitial(name) {
   return name ? name.charAt(0).toUpperCase() : '?'
 }
 
-export default function ContactModal({ freelancer, onClose }) {
+export default function ContactModal({ freelancer, onClose, endpoint }) {
+  const contactUrl = endpoint ?? `/freelancers/${freelancer?.id}/contact/`
   const { data: contact, isLoading, error } = useQuery({
-    queryKey: ['contact', freelancer?.id],
-    queryFn: () => api.get(`/freelancers/${freelancer.id}/contact/`),
+    queryKey: ['contact', contactUrl],
+    queryFn: () => api.get(contactUrl),
     enabled: !!freelancer?.id,
     staleTime: 60 * 1000,
     retry: false,

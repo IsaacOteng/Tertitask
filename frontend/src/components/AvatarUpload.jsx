@@ -35,26 +35,24 @@ export default function AvatarUpload({ size = 24 }) {
 
     setUploading(true)
     try {
-      // 1. Get presigned URL from backend
       const { upload_url, public_url } = await api.post('/uploads/presign/', {
         purpose: 'avatar',
         content_type: file.type,
         size_bytes: file.size,
       })
 
-      // 2. PUT file directly to R2 (no auth headers)
       const putRes = await fetch(upload_url, {
         method: 'PUT',
         headers: { 'Content-Type': file.type },
         body: file,
       })
-      if (!putRes.ok) throw new Error('Upload to storage failed.')
+      if (!putRes.ok) throw new Error('storage_put_failed')
 
-      // 3. Save the public URL to the user profile
       const updated = await api.patch('/me/', { avatar_url: public_url })
       setMe(updated)
     } catch (err) {
-      setError(err.message || 'Upload failed. Please try again.')
+      console.error('Avatar upload failed:', err)
+      setError('Photo upload failed. Please try again.')
     } finally {
       setUploading(false)
       // Reset so the same file can be re-selected after an error

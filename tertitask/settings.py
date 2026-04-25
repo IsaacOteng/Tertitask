@@ -29,6 +29,8 @@ INSTALLED_APPS = [
     'payouts',
     'uploads',
     'common',
+    'jobs',
+    'conversations',
 ]
 
 MIDDLEWARE = [

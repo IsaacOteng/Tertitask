@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
-import { ArrowLeft, CheckCircle } from 'lucide-react'
+import { ArrowLeft, CheckCircle, Camera, Loader2, ImagePlus } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../lib/api'
 import { useDocumentTitle } from '../hooks/useDocumentTitle'
@@ -12,6 +12,94 @@ const CONTACT_OPTIONS = [
   { value: 'phone', label: 'Phone' },
   { value: 'either', label: 'Either' },
 ]
+
+function CoverUpload({ me, setMe }) {
+  const inputRef = useRef(null)
+  const [uploading, setUploading] = useState(false)
+
+  async function handleFile(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const ALLOWED = ['image/jpeg', 'image/png', 'image/webp']
+    if (!ALLOWED.includes(file.type)) return
+    if (file.size > 8 * 1024 * 1024) return
+    setUploading(true)
+    try {
+      const { upload_url, public_url } = await api.post('/uploads/presign/', {
+        purpose: 'cover',
+        content_type: file.type,
+        size_bytes: file.size,
+      })
+      const putRes = await fetch(upload_url, {
+        method: 'PUT',
+        headers: { 'Content-Type': file.type },
+        body: file,
+      })
+      if (!putRes.ok) throw new Error('put_failed')
+      const updated = await api.patch('/me/', { cover_url: public_url })
+      setMe(updated)
+    } catch (err) {
+      console.error('Cover upload failed:', err)
+    } finally {
+      setUploading(false)
+      if (inputRef.current) inputRef.current.value = ''
+    }
+  }
+
+  return (
+    <div>
+      <div className="mb-1.5">
+        <label className="block text-fs-small font-medium text-ink">Cover photo</label>
+        <p className="text-fs-tiny text-ink-muted mt-0.5">Banner image shown at the top of your profile. Recommended: 1500×500px.</p>
+      </div>
+      <div
+        className="relative w-full h-32 rounded-input border border-line bg-bg-subtle overflow-hidden cursor-pointer group"
+        onClick={() => inputRef.current?.click()}
+      >
+        {me?.cover_url ? (
+          <img src={me.cover_url} alt="Cover" className="w-full h-full object-cover" />
+        ) : (
+          <div className="flex flex-col items-center justify-center h-full gap-2 text-ink-muted group-hover:text-ink-soft transition-colors">
+            <ImagePlus size={22} />
+            <span className="text-fs-tiny font-medium">Click to upload cover photo</span>
+          </div>
+        )}
+        {uploading && (
+          <div className="absolute inset-0 bg-ink/40 flex items-center justify-center">
+            <Loader2 size={20} className="text-white animate-spin" />
+          </div>
+        )}
+        {!uploading && me?.cover_url && (
+          <div className="absolute inset-0 bg-ink/0 group-hover:bg-ink/30 transition-colors flex items-center justify-center">
+            <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1.5 bg-ink/70 text-white text-fs-tiny font-medium px-3 py-1.5 rounded-full">
+              <Camera size={13} />
+              Change cover
+            </div>
+          </div>
+        )}
+      </div>
+      {me?.cover_url && (
+        <button
+          type="button"
+          onClick={async () => {
+            const updated = await api.patch('/me/', { cover_url: '' })
+            setMe(updated)
+          }}
+          className="mt-1.5 text-fs-tiny text-danger hover:underline"
+        >
+          Remove cover photo
+        </button>
+      )}
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        className="sr-only"
+        onChange={handleFile}
+      />
+    </div>
+  )
+}
 
 function FieldLabel({ children, required, hint }) {
   return (
@@ -85,7 +173,7 @@ export default function EditProfile() {
     const selected = form.skills
     if (selected.includes(skill)) {
       setForm({ ...form, skills: selected.filter((s) => s !== skill) })
-    } else if (selected.length < 5) {
+    } else if (selected.length < 10) {
       setForm({ ...form, skills: [...selected, skill] })
     }
   }
@@ -152,6 +240,8 @@ export default function EditProfile() {
               <div className="flex flex-col items-center py-3 border border-dashed border-line rounded-input bg-bg-subtle">
                 <AvatarUpload size={20} />
               </div>
+              {/* Cover photo */}
+              <CoverUpload me={me} setMe={setMe} />
               <div>
                 <FieldLabel required>Full name</FieldLabel>
                 <Input
@@ -225,11 +315,11 @@ export default function EditProfile() {
                 </Select>
               </div>
               <div>
-                <FieldLabel hint="Select up to 5 skills that best represent your expertise">Skills (up to 5)</FieldLabel>
+                <FieldLabel hint="Select up to 10 skills that best represent your expertise">Skills (up to 10)</FieldLabel>
                 <div className="flex flex-wrap gap-2 mt-1">
                   {skillOptions.map((skill) => {
                     const isSelected = form.skills.includes(skill)
-                    const atLimit = form.skills.length >= 5 && !isSelected
+                    const atLimit = form.skills.length >= 10 && !isSelected
                     return (
                       <button
                         key={skill}
@@ -249,7 +339,7 @@ export default function EditProfile() {
                     )
                   })}
                 </div>
-                <p className="mt-2 text-fs-tiny text-ink-muted">{form.skills.length}/5 selected</p>
+                <p className="mt-2 text-fs-tiny text-ink-muted">{form.skills.length}/10 selected</p>
               </div>
             </div>
           </div>

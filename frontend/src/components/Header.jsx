@@ -1,20 +1,74 @@
 import { useRef, useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { LayoutDashboard, Bookmark, ShoppingBag, BarChart2, LogOut, User, Package, PlusCircle, Pencil } from 'lucide-react'
+import { useUnreadCount } from '../hooks/useConversations'
+import { LayoutDashboard, Bookmark, ShoppingBag, BarChart2, LogOut, User, Package, PlusCircle, Pencil, MessageCircle, Trash2 } from 'lucide-react'
 
-const NAV_LINKS = [
-  { label: 'My profile',   to: '/me',       icon: User },
-  { label: 'Edit profile', to: '/me/edit',  icon: Pencil },
-  { label: 'My gigs',      to: '/me/gigs',  icon: LayoutDashboard },
-  { label: 'Saved',        to: '/me/saved', icon: Bookmark },
-  { label: 'Orders',       to: '/orders',   icon: ShoppingBag },
-  { label: 'Sales',        to: '/sales',    icon: Package },
-  { label: 'Earnings',     to: '/earnings', icon: BarChart2 },
+const FREELANCER_NAV = [
+  { label: 'My profile',   to: '/me',        icon: User },
+  { label: 'Edit profile', to: '/me/edit',   icon: Pencil },
+  { label: 'My gigs',      to: '/me/gigs',   icon: LayoutDashboard },
+  { label: 'Messages',     to: '/messages',  icon: MessageCircle },
+  { label: 'Saved',        to: '/me/saved',  icon: Bookmark },
+  { label: 'Orders',       to: '/orders',    icon: ShoppingBag },
+  { label: 'Sales',        to: '/sales',     icon: Package },
+  { label: 'Earnings',     to: '/earnings',  icon: BarChart2 },
 ]
 
-function AvatarMenu({ me, onSignOut }) {
+const CLIENT_NAV = [
+  { label: 'My profile',   to: '/me',        icon: User },
+  { label: 'Edit profile', to: '/me/edit',   icon: Pencil },
+  { label: 'My tasks',     to: '/me',        icon: LayoutDashboard },
+  { label: 'Messages',     to: '/messages',  icon: MessageCircle },
+  { label: 'Browse gigs',  to: '/browse',    icon: Bookmark },
+  { label: 'Orders',       to: '/orders',    icon: ShoppingBag },
+]
+
+function UnreadBadge() {
+  const count = useUnreadCount()
+  if (!count) return null
+  return (
+    <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-brand text-white text-[10px] font-bold flex items-center justify-center leading-none">
+      {count > 9 ? '9+' : count}
+    </span>
+  )
+}
+
+function DeleteAccountDialog({ onConfirm, onCancel, busy }) {
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-ink/40 backdrop-blur-sm px-4">
+      <div className="w-full max-w-sm bg-bg rounded-card border border-line shadow-elevated p-6">
+        <h2 className="font-semibold text-fs-body text-ink mb-1">Delete account?</h2>
+        <p className="text-fs-small text-ink-muted leading-relaxed mb-5">
+          This permanently deletes your account, all your gigs, tasks, messages, and data. Your email will be freed and can be used to sign up again. This cannot be undone.
+        </p>
+        <div className="flex justify-end gap-3">
+          <button
+            onClick={onCancel}
+            disabled={busy}
+            className="h-9 px-4 rounded-input border border-line text-fs-small font-medium text-ink-soft hover:text-ink hover:border-ink-soft transition-colors disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={busy}
+            className="h-9 px-5 rounded-input bg-red-600 text-white text-fs-small font-semibold hover:bg-red-700 transition-colors disabled:opacity-60 flex items-center gap-2"
+          >
+            {busy ? 'Deleting…' : 'Yes, delete my account'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function AvatarMenu({ me, onSignOut, onDeleteAccount }) {
+  const navLinks = me?.role === 'client' ? CLIENT_NAV : FREELANCER_NAV
   const [open, setOpen] = useState(false)
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false)
+  const [deletebusy, setDeleteBusy] = useState(false)
   const ref = useRef(null)
 
   useEffect(() => {
@@ -24,6 +78,16 @@ function AvatarMenu({ me, onSignOut }) {
     document.addEventListener('mousedown', handleClick)
     return () => document.removeEventListener('mousedown', handleClick)
   }, [])
+
+  async function handleDeleteConfirm() {
+    setDeleteBusy(true)
+    try {
+      await onDeleteAccount()
+    } catch {
+      setDeleteBusy(false)
+      setShowDeleteDialog(false)
+    }
+  }
 
   return (
     <div className="relative" ref={ref}>
@@ -55,7 +119,7 @@ function AvatarMenu({ me, onSignOut }) {
             <p className="text-fs-tiny text-ink-muted truncate mt-0.5">{me?.email}</p>
           </div>
           <nav className="py-1.5">
-            {NAV_LINKS.map(({ label, to, icon: Icon }) => (
+            {navLinks.map(({ label, to, icon: Icon }) => (
               <Link
                 key={to}
                 to={to}
@@ -75,69 +139,71 @@ function AvatarMenu({ me, onSignOut }) {
               <LogOut size={14} className="shrink-0" />
               Log out
             </button>
+            <button
+              onClick={() => { setOpen(false); setShowDeleteDialog(true) }}
+              className="flex items-center gap-3 w-full text-left px-4 py-2 text-fs-small text-ink-muted hover:text-danger hover:bg-red-50 transition-colors"
+            >
+              <Trash2 size={14} className="shrink-0" />
+              Delete account
+            </button>
           </div>
         </div>
+      )}
+
+      {showDeleteDialog && createPortal(
+        <DeleteAccountDialog
+          busy={deletebusy}
+          onConfirm={handleDeleteConfirm}
+          onCancel={() => setShowDeleteDialog(false)}
+        />,
+        document.body,
       )}
     </div>
   )
 }
 
 export default function Header() {
-  const { user, me, loading, signIn, signOut } = useAuth()
+  const { user, me, loading, openSignIn, signOut, deleteAccount } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
 
-  const isLanding = location.pathname === '/'
-  const [scrolled, setScrolled] = useState(false)
+  const isClient = me?.role === 'client'
 
-  useEffect(() => {
-    if (!isLanding) return
-    function onScroll() { setScrolled(window.scrollY > 40) }
-    window.addEventListener('scroll', onScroll, { passive: true })
-    return () => window.removeEventListener('scroll', onScroll)
-  }, [isLanding])
-
-  function handlePostGig() {
-    navigate(me?.onboarding_complete ? '/me/gigs/new' : '/onboarding')
+  function handlePost() {
+    if (!user) { openSignIn(); return }
+    navigate(isClient ? '/jobs/new' : '/me/gigs/new')
   }
 
   const isActive = (path) => location.pathname === path
 
-  // On landing: transparent until scrolled; on other pages: always solid
-  const solid = !isLanding || scrolled
+  const desktopNavLinks = [
+    { to: '/', label: 'Home' },
+    { to: '/browse', label: 'Browse Gigs' },
+    { to: '/jobs', label: 'Job Board' },
+  ]
+
+  const mobileNavLinks = [
+    { to: '/browse', label: 'Gigs' },
+    { to: '/jobs', label: 'Jobs' },
+  ]
 
   return (
-    <header
-      className={`h-16 sticky top-0 z-40 transition-all duration-300 ${
-        solid
-          ? 'bg-bg/95 backdrop-blur-md border-b border-line'
-          : 'bg-transparent border-b border-transparent'
-      }`}
-    >
+    <header className="h-16 sticky top-0 z-40 bg-bg/95 backdrop-blur-md border-b border-line">
       <div className="max-w-content mx-auto h-full flex items-center justify-between px-4 gap-4">
 
         {/* Logo */}
-        <Link
-          to="/"
-          className={`font-display text-fs-h3 tracking-tight transition-colors shrink-0 ${
-            solid ? 'text-ink hover:text-brand' : 'text-white hover:text-brand'
-          }`}
-        >
+        <Link to="/" className="font-display text-fs-h3 tracking-tight text-ink hover:text-brand transition-colors shrink-0">
           TertiTask
         </Link>
 
         {/* Center nav */}
         <nav className="hidden md:flex items-center gap-0.5 flex-1">
-          {[{ to: '/', label: 'Home' }, { to: '/browse', label: 'Browse Gigs' }].map(({ to, label }) => (
+          {desktopNavLinks.map(({ to, label }) => (
             <Link
               key={to}
               to={to}
               className={`px-3.5 py-2 rounded-input text-fs-small font-medium transition-colors ${
-                isActive(to)
-                  ? 'bg-brand/10 text-brand'
-                  : solid
-                  ? 'text-ink-soft hover:text-ink hover:bg-bg-subtle'
-                  : 'text-white/70 hover:text-white hover:bg-white/10'
+                isActive(to) ? 'bg-brand/10 text-brand' : 'text-ink-soft hover:text-ink hover:bg-bg-subtle'
               }`}
             >
               {label}
@@ -149,14 +215,12 @@ export default function Header() {
         <div className="flex items-center gap-3">
           {/* Mobile nav */}
           <div className="md:hidden flex items-center gap-3">
-            {[{ to: '/', label: 'Home' }, { to: '/browse', label: 'Browse' }].map(({ to, label }) => (
+            {mobileNavLinks.map(({ to, label }) => (
               <Link
                 key={to}
                 to={to}
                 className={`text-fs-small font-medium transition-colors ${
-                  isActive(to)
-                    ? 'text-brand'
-                    : solid ? 'text-ink-soft hover:text-ink' : 'text-white/70 hover:text-white'
+                  isActive(to) ? 'text-brand' : 'text-ink-soft hover:text-ink'
                 }`}
               >
                 {label}
@@ -164,25 +228,40 @@ export default function Header() {
             ))}
           </div>
 
-          {/* Post a Gig */}
+          {/* Messages button — only when logged in */}
+          {user && (
+            <Link
+              to="/messages"
+              className={`relative flex items-center gap-1.5 h-8 px-3 rounded-input text-fs-small font-medium transition-colors ${
+                location.pathname.startsWith('/messages')
+                  ? 'bg-brand/10 text-brand'
+                  : 'text-ink-soft hover:text-ink hover:bg-bg-subtle'
+              }`}
+              aria-label="Messages"
+            >
+              <span className="relative">
+                <MessageCircle size={15} />
+                <UnreadBadge />
+              </span>
+              <span className="hidden sm:inline">Chat</span>
+            </Link>
+          )}
+
+          {/* Post button — label depends on role */}
           <button
-            onClick={handlePostGig}
-            className={`hidden sm:flex items-center gap-1.5 h-8 px-3 rounded-input text-fs-small font-medium transition-colors ${
-              solid
-                ? 'border border-line text-ink-soft hover:text-ink hover:border-ink-soft'
-                : 'border border-white/20 text-white/70 hover:text-white hover:border-white/40'
-            }`}
+            onClick={handlePost}
+            className="hidden sm:flex items-center gap-1.5 h-8 px-3 rounded-input text-fs-small font-medium border border-line text-ink-soft hover:text-ink hover:border-ink-soft transition-colors"
           >
             <PlusCircle size={13} />
-            Post a Gig
+            {isClient ? 'Post a Task' : 'Post a Gig'}
           </button>
 
           {!loading && (
             user ? (
-              <AvatarMenu me={me} onSignOut={signOut} />
+              <AvatarMenu me={me} onSignOut={signOut} onDeleteAccount={deleteAccount} />
             ) : (
               <button
-                onClick={signIn}
+                onClick={openSignIn}
                 className="h-8 px-4 rounded-input bg-brand text-white font-semibold text-fs-small hover:bg-brand-ink transition-colors"
               >
                 Sign in

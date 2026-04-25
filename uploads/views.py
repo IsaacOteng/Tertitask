@@ -23,7 +23,7 @@ class PresignView(APIView):
         resource_id  = request.data.get('resource_id')  # gig_id, order_id, or None
 
         # ── Validate inputs ───────────────────────────────────────────────────
-        if purpose not in ('avatar', 'gig_cover', 'gig_portfolio', 'delivery'):
+        if purpose not in ('avatar', 'cover', 'gig_cover', 'gig_portfolio', 'delivery', 'job_image', 'message_image'):
             return Response({'detail': 'Invalid purpose.'}, status=status.HTTP_400_BAD_REQUEST)
 
         if content_type not in ALLOWED_CONTENT_TYPES:
@@ -48,6 +48,11 @@ class PresignView(APIView):
             key = f'avatars/{user.id}.{ext}'
             base_url = settings.R2_PUBLIC_BASE_URL
 
+        elif purpose == 'cover':
+            bucket = settings.R2_PUBLIC_BUCKET
+            key = f'covers/{user.id}.{ext}'
+            base_url = settings.R2_PUBLIC_BASE_URL
+
         elif purpose == 'gig_cover':
             bucket = settings.R2_PUBLIC_BUCKET
             base_url = settings.R2_PUBLIC_BASE_URL
@@ -68,6 +73,16 @@ class PresignView(APIView):
             bucket = settings.R2_PUBLIC_BUCKET
             base_url = settings.R2_PUBLIC_BASE_URL
             key = f'gigs/portfolio/{user.id}/{uuid.uuid4()}.{ext}'
+
+        elif purpose == 'job_image':
+            bucket = settings.R2_PUBLIC_BUCKET
+            base_url = settings.R2_PUBLIC_BASE_URL
+            key = f'jobs/{uuid.uuid4()}.{ext}'
+
+        elif purpose == 'message_image':
+            bucket = settings.R2_PUBLIC_BUCKET
+            base_url = settings.R2_PUBLIC_BASE_URL
+            key = f'messages/{uuid.uuid4()}.{ext}'
 
         elif purpose == 'delivery':
             from orders.models import Order

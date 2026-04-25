@@ -1,7 +1,11 @@
+import logging
+from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from accounts.serializers import MeSerializer
+
+logger = logging.getLogger(__name__)
 
 
 class SyncView(APIView):
@@ -25,3 +29,27 @@ class MeView(APIView):
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response(serializer.data)
+
+
+class DeleteAccountView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request):
+        user = request.user
+        firebase_uid = user.firebase_uid
+
+        # Delete from Firebase first so the email is freed immediately.
+        try:
+            from firebase_admin import auth as fb_auth
+            fb_auth.delete_user(firebase_uid)
+        except Exception as exc:
+            logger.error('Firebase delete_user failed for %s: %s', firebase_uid, exc)
+            return Response(
+                {'detail': 'Could not delete account from authentication provider. Please try again.'},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        # Cascade deletes all related data: gigs, jobs, conversations, messages, etc.
+        user.delete()
+        logger.info('Account deleted: firebase_uid=%s', firebase_uid)
+        return Response(status=status.HTTP_204_NO_CONTENT)

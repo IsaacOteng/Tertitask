@@ -2,13 +2,13 @@ import { useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import {
   ArrowLeft, GraduationCap, BookOpen, Briefcase, MessageCircle,
-  LayoutGrid, Tag, Calendar, CheckCircle, Layers, User2, Link2, ExternalLink, Image,
+  LayoutGrid, Tag, Calendar, CheckCircle, Layers, User2, Link2, ExternalLink, Image, Pencil,
 } from 'lucide-react'
 import { useFreelancer } from '../hooks/useGigs'
 import { useAuth } from '../context/AuthContext'
 import { useDocumentTitle } from '../hooks/useDocumentTitle'
 import GigCard from '../components/GigCard'
-import ContactModal from '../components/ContactModal'
+import ApplyModal from '../components/ApplyModal'
 
 function avatarInitial(name) {
   return name ? name.charAt(0).toUpperCase() : '?'
@@ -33,7 +33,7 @@ function formatDate(iso) {
 
 export default function FreelancerProfile() {
   const { id } = useParams()
-  const { user, signIn } = useAuth()
+  const { user, me, openSignIn } = useAuth()
   const [showContact, setShowContact] = useState(false)
 
   useDocumentTitle(null)
@@ -41,7 +41,7 @@ export default function FreelancerProfile() {
   const { data: freelancer, isLoading, isError } = useFreelancer(id)
 
   function handleContact() {
-    if (!user) { signIn(); return }
+    if (!user) { openSignIn(); return }
     setShowContact(true)
   }
 
@@ -49,7 +49,7 @@ export default function FreelancerProfile() {
     return (
       <div className="min-h-screen bg-bg-subtle">
         <div className="h-52 bg-ink" />
-        <div className="max-w-4xl mx-auto px-4">
+        <div className="w-full max-w-[80%] min-w-[320px] mx-auto px-4">
           <div className="flex items-end gap-5 -mt-16 mb-8 animate-pulse">
             <div className="w-28 h-28 rounded-full bg-line border-4 border-white shrink-0 z-10 relative" />
             <div className="pb-3 space-y-2 flex-1">
@@ -85,6 +85,8 @@ export default function FreelancerProfile() {
     )
   }
 
+  const isOwnProfile = me && String(me.id) === String(freelancer.id)
+
   const gigs = freelancer.gigs || []
   const skills = Array.isArray(freelancer.skills) ? freelancer.skills : []
   const profileLinks = Array.isArray(freelancer.profile_links) ? freelancer.profile_links : []
@@ -107,35 +109,30 @@ export default function FreelancerProfile() {
   const trustScore = trustSignals.filter((t) => t.ok).length
 
   return (
-    <div className="min-h-screen bg-bg-subtle">
+    <div className="min-h-screen bg-bg-subtle py-6">
+      <div className="w-full md:max-w-[78%] mx-auto px-4">
 
       {/* ── Banner ──────────────────────────────────────────────── */}
-      <div
-        className="relative h-48"
-        style={{
-          background: 'linear-gradient(135deg, #0B0B0D 0%, #111612 40%, #0d2018 100%)',
-        }}
-      >
-        {/* Dot grid */}
-        <div
-          className="absolute inset-0 opacity-60"
-          style={{
-            backgroundImage: 'radial-gradient(rgba(255,255,255,0.07) 1px, transparent 1px)',
-            backgroundSize: '28px 28px',
-          }}
-        />
-        {/* Green glow */}
-        <div
-          className="absolute inset-0"
-          style={{
-            background: 'radial-gradient(ellipse at 20% 80%, rgba(20,184,102,0.18) 0%, transparent 55%)',
-          }}
-        />
+      <div className="relative h-52 rounded-2xl overflow-hidden shadow-card mb-0">
+        {freelancer.cover_url ? (
+          <img
+            src={freelancer.cover_url}
+            alt="Cover"
+            className="w-full h-full object-cover"
+            style={{ objectPosition: `center ${freelancer.cover_position_y ?? 50}%` }}
+          />
+        ) : (
+          <>
+            <div className="absolute inset-0" style={{ background: 'linear-gradient(135deg, #0B0B0D 0%, #111612 40%, #0d2018 100%)' }} />
+            <div className="absolute inset-0 opacity-60" style={{ backgroundImage: 'radial-gradient(rgba(255,255,255,0.07) 1px, transparent 1px)', backgroundSize: '28px 28px' }} />
+            <div className="absolute inset-0" style={{ background: 'radial-gradient(ellipse at 20% 80%, rgba(20,184,102,0.18) 0%, transparent 55%)' }} />
+          </>
+        )}
         {/* Back link inside banner */}
-        <div className="relative max-w-4xl mx-auto px-4 pt-5">
+        <div className="relative px-5 pt-5">
           <Link
             to="/browse"
-            className="inline-flex items-center gap-1.5 text-fs-small text-white/50 hover:text-white transition-colors group"
+            className="inline-flex items-center gap-1.5 text-fs-small text-white/60 hover:text-white transition-colors group"
           >
             <ArrowLeft size={14} className="group-hover:-translate-x-0.5 transition-transform" />
             Browse gigs
@@ -143,10 +140,10 @@ export default function FreelancerProfile() {
         </div>
       </div>
 
-      <div className="max-w-4xl mx-auto px-4">
+      <div className="">
 
         {/* ── Hero row ─────────────────────────────────────────── */}
-        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 -mt-12 mb-7">
+        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 -mt-12 mb-7 px-2">
 
           {/* Avatar + identity */}
           <div className="flex items-end gap-4">
@@ -155,10 +152,10 @@ export default function FreelancerProfile() {
                 <img
                   src={freelancer.avatar_url}
                   alt={freelancer.full_name}
-                  className="w-28 h-28 rounded-full object-cover border-4 border-white shadow-elevated"
+                  className="w-28 h-28 rounded-full object-cover border-4 border-bg-subtle shadow-elevated"
                 />
               ) : (
-                <div className="w-28 h-28 rounded-full bg-gradient-to-br from-brand to-brand-ink text-white flex items-center justify-center text-[44px] font-display font-bold border-4 border-white shadow-elevated select-none">
+                <div className="w-28 h-28 rounded-full bg-gradient-to-br from-brand to-brand-ink text-white flex items-center justify-center text-[44px] font-display font-bold border-4 border-bg-subtle shadow-elevated select-none">
                   {avatarInitial(freelancer.full_name)}
                 </div>
               )}
@@ -201,13 +198,23 @@ export default function FreelancerProfile() {
 
           {/* Action buttons */}
           <div className="flex items-center gap-2.5 self-end sm:self-end pb-1">
-            <button
-              onClick={handleContact}
-              className="inline-flex items-center gap-2 h-10 px-5 rounded-input bg-brand text-white font-semibold text-fs-small hover:bg-brand-ink transition-colors shadow-glow"
-            >
-              <MessageCircle size={15} />
-              Contact {firstName}
-            </button>
+            {isOwnProfile ? (
+              <Link
+                to="/me/edit"
+                className="inline-flex items-center gap-2 h-10 px-5 rounded-input border border-line bg-bg text-ink font-semibold text-fs-small hover:border-ink-soft hover:text-ink transition-colors"
+              >
+                <Pencil size={15} />
+                Edit profile
+              </Link>
+            ) : (
+              <button
+                onClick={handleContact}
+                className="inline-flex items-center gap-2 h-10 px-5 rounded-input bg-brand text-white font-semibold text-fs-small hover:bg-brand-ink transition-colors shadow-glow"
+              >
+                <MessageCircle size={15} />
+                Contact {firstName}
+              </button>
+            )}
           </div>
         </div>
 
@@ -450,29 +457,38 @@ export default function FreelancerProfile() {
             </div>
 
             {/* Contact CTA */}
-            <button
-              onClick={handleContact}
-              className="w-full h-12 rounded-input bg-brand text-white font-bold text-fs-body hover:bg-brand-ink transition-colors flex items-center justify-center gap-2 shadow-glow"
-            >
-              <MessageCircle size={17} />
-              Contact {firstName}
-            </button>
+            {!isOwnProfile && (
+              <>
+                <button
+                  onClick={handleContact}
+                  className="w-full h-12 rounded-input bg-brand text-white font-bold text-fs-body hover:bg-brand-ink transition-colors flex items-center justify-center gap-2 shadow-glow"
+                >
+                  <MessageCircle size={17} />
+                  Contact {firstName}
+                </button>
 
-            {freelancer.preferred_contact && (
-              <p className="text-fs-tiny text-ink-muted text-center -mt-2">
-                Prefers{' '}
-                <span className="font-semibold text-ink-soft capitalize">
-                  {freelancer.preferred_contact === 'either' ? 'any channel' : freelancer.preferred_contact}
-                </span>
-              </p>
+                {freelancer.preferred_contact && (
+                  <p className="text-fs-tiny text-ink-muted text-center -mt-2">
+                    Prefers{' '}
+                    <span className="font-semibold text-ink-soft capitalize">
+                      {freelancer.preferred_contact === 'either' ? 'any channel' : freelancer.preferred_contact}
+                    </span>
+                  </p>
+                )}
+              </>
             )}
           </div>
         </div>
       </div>
 
       {showContact && (
-        <ContactModal freelancer={freelancer} onClose={() => setShowContact(false)} />
+        <ApplyModal
+          userId={freelancer.id}
+          contextTitle={freelancer.full_name}
+          onClose={() => setShowContact(false)}
+        />
       )}
+      </div>
     </div>
   )
 }

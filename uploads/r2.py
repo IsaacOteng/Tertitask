@@ -21,7 +21,6 @@ def generate_presigned_put(bucket, key, content_type, size_bytes, expires=300):
             'Bucket': bucket,
             'Key': key,
             'ContentType': content_type,
-            'ContentLength': size_bytes,
         },
         ExpiresIn=expires,
         HttpMethod='PUT',
