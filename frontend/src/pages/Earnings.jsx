@@ -93,7 +93,7 @@ export default function Earnings() {
   if (isLoading) return <EarningsSkeleton />
 
   const STAT_CARDS = [
-    { label: 'Pending', value: earnings?.pending ?? 0, hint: 'Approving, clearing soon', icon: Clock, iconBg: 'bg-amber-50 text-amber-600' },
+    { label: 'Pending', value: earnings?.pending ?? 0, hint: 'Holds for 7 days after approval, then moves to Available', icon: Clock, iconBg: 'bg-amber-50 text-amber-600' },
     { label: 'Available', value: available, hint: 'Ready to withdraw', icon: Wallet, iconBg: 'bg-brand/10 text-brand' },
     { label: 'Lifetime', value: earnings?.lifetime ?? 0, hint: 'Total ever earned', icon: TrendingUp, iconBg: 'bg-blue-50 text-blue-600' },
   ]

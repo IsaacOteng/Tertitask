@@ -5,6 +5,7 @@ from orders.views import (
     ApproveView,
     CancelView,
     DeliverView,
+    DisputeResolveView,
     DisputeView,
     FreelancerCancelView,
     JobOfferListCreateView,
@@ -34,6 +35,7 @@ urlpatterns = [
     path('orders/<uuid:pk>/cancel/', CancelView.as_view(), name='order-cancel'),
     path('orders/<uuid:pk>/freelancer-cancel/', FreelancerCancelView.as_view(), name='order-freelancer-cancel'),
     path('orders/<uuid:pk>/dispute/', DisputeView.as_view(), name='order-dispute'),
+    path('orders/<uuid:pk>/dispute/resolve/', DisputeResolveView.as_view(), name='order-dispute-resolve'),
     # Offers (job board)
     path('jobs/<uuid:job_id>/offers/', JobOfferListCreateView.as_view(), name='job-offers'),
     path('jobs/<uuid:job_id>/my-offer/', MyOfferOnJobView.as_view(), name='my-offer'),

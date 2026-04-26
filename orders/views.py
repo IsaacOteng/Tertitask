@@ -494,6 +494,85 @@ class DisputeView(APIView):
         return Response(OrderSerializer(order).data, status=status.HTTP_201_CREATED)
 
 
+class DisputeResolveView(APIView):
+    """POST /api/orders/<pk>/dispute/resolve/ — staff only."""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        if not request.user.is_staff:
+            raise PermissionDenied()
+
+        order = _get_order_or_404(pk)
+        if order.status != 'disputed':
+            return Response(
+                {'detail': f'Order must be disputed to resolve (current: {order.status}).'},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        try:
+            dispute = order.dispute
+        except Dispute.DoesNotExist:
+            return Response({'detail': 'No dispute found for this order.'}, status=status.HTTP_404_NOT_FOUND)
+
+        if dispute.status == 'resolved':
+            return Response({'detail': 'Dispute already resolved.'}, status=status.HTTP_409_CONFLICT)
+
+        resolution = request.data.get('resolution', '').strip()
+        admin_notes = request.data.get('admin_notes', '').strip()
+
+        if resolution not in ('refund', 'release'):
+            return Response(
+                {'detail': 'resolution must be "refund" or "release".'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        now = timezone.now()
+
+        if resolution == 'release':
+            with transaction.atomic():
+                order = transition(order, 'approved')
+                order.clear_at = now + timedelta(days=settings.CLEARING_DAYS)
+                order.save(update_fields=['clear_at'])
+                _write_earning_pending(order)
+                dispute.status = 'resolved'
+                dispute.resolution = 'release'
+                dispute.admin_notes = admin_notes
+                dispute.resolved_at = now
+                dispute.save(update_fields=['status', 'resolution', 'admin_notes', 'resolved_at'])
+            _notify(order.freelancer, 'dispute_resolved',
+                'Dispute resolved — payment releasing',
+                body=f'Admin reviewed the dispute on "{order.title}" and released payment to you.',
+                data={'order_id': str(order.id)})
+            _notify(order.client, 'dispute_resolved',
+                'Dispute resolved',
+                body=f'Admin reviewed the dispute on "{order.title}" and released payment to the freelancer.',
+                data={'order_id': str(order.id)})
+
+        else:  # refund
+            try:
+                ps.refund(order.paystack_reference)
+            except ps.PaystackError as exc:
+                return Response({'detail': str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
+            with transaction.atomic():
+                order = transition(order, 'cancelled')
+                dispute.status = 'resolved'
+                dispute.resolution = 'refund'
+                dispute.admin_notes = admin_notes
+                dispute.resolved_at = now
+                dispute.save(update_fields=['status', 'resolution', 'admin_notes', 'resolved_at'])
+            _notify(order.client, 'dispute_resolved',
+                'Dispute resolved — refund on its way',
+                body=f'Admin reviewed the dispute on "{order.title}" and issued a full refund.',
+                data={'order_id': str(order.id)})
+            _notify(order.freelancer, 'dispute_resolved',
+                'Dispute resolved',
+                body=f'Admin reviewed the dispute on "{order.title}" and refunded the client.',
+                data={'order_id': str(order.id)})
+
+        order.refresh_from_db()
+        return Response(OrderSerializer(order).data)
+
+
 # ── Requirements (set after payment) ─────────────────────────────────────────
 
 class OrderRequirementsView(APIView):
@@ -558,7 +637,7 @@ class FreelancerCancelView(APIView):
         order = _get_order_or_404(pk)
         if order.freelancer != request.user:
             raise PermissionDenied()
-        if order.status not in ('funded', 'in_progress'):
+        if order.status != 'funded':
             return Response(
                 {'detail': f'Order cannot be cancelled at this stage (current: {order.status}).'},
                 status=status.HTTP_409_CONFLICT,
@@ -648,7 +727,7 @@ class PaystackWebhookView(View):
             try:
                 transition(order, 'cancelled')
             except IllegalTransition:
-                pass
+                logger.warning('refund.processed webhook: order %s already in terminal state %s', order.id, order.status)
 
         elif event_type == 'transfer.success':
             self._handle_transfer_success(data)
@@ -662,7 +741,7 @@ class PaystackWebhookView(View):
             payout = Payout.objects.select_for_update().get(paystack_transfer_code=transfer_code)
         except Payout.DoesNotExist:
             return
-        if payout.status != 'success':
+        if payout.status not in ('success', 'failed'):
             payout.status = 'success'
             payout.save(update_fields=['status'])
 

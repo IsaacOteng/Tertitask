@@ -324,6 +324,23 @@ function RequirementsModal({ gig, tier, onClose, onSubmit, isSubmitting, orderEr
             <p className="text-fs-tiny text-danger">{localError || orderError}</p>
           )}
 
+          {/* Payment breakdown */}
+          <div className="rounded-input bg-bg-subtle border border-line px-4 py-3 space-y-1.5">
+            <div className="flex justify-between text-fs-tiny text-ink-muted">
+              <span>Gig price</span>
+              <span>{formatPrice(selectedPrice)}</span>
+            </div>
+            <div className="flex justify-between text-fs-tiny text-ink-muted">
+              <span>Platform fee (10%)</span>
+              <span>{formatPrice(Math.round(selectedPrice * 0.1))}</span>
+            </div>
+            <div className="flex justify-between text-fs-small font-semibold text-ink pt-1 border-t border-line">
+              <span>You pay</span>
+              <span>{formatPrice(selectedPrice)}</span>
+            </div>
+            <p className="text-[10px] text-ink-muted">The platform fee is deducted from the freelancer's payout — you pay only the listed price.</p>
+          </div>
+
           <div className="flex items-center justify-end gap-3 pb-1">
             <button
               type="button"
