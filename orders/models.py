@@ -3,11 +3,47 @@ from django.conf import settings
 from django.db import models
 
 
+class Offer(models.Model):
+    STATUS_PENDING = 'pending'
+    STATUS_ACCEPTED = 'accepted'
+    STATUS_REJECTED = 'rejected'
+    STATUS_WITHDRAWN = 'withdrawn'
+    STATUS_CHOICES = [
+        (STATUS_PENDING, 'Pending'),
+        (STATUS_ACCEPTED, 'Accepted'),
+        (STATUS_REJECTED, 'Rejected'),
+        (STATUS_WITHDRAWN, 'Withdrawn'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    job = models.ForeignKey(
+        'jobs.JobPost', on_delete=models.CASCADE, related_name='offers',
+    )
+    freelancer = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='offers_sent',
+    )
+    price = models.PositiveIntegerField()          # pesewas
+    delivery_days = models.PositiveSmallIntegerField()
+    message = models.TextField(max_length=500)
+    status = models.CharField(max_length=16, choices=STATUS_CHOICES, default=STATUS_PENDING)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'offers'
+        unique_together = [('job', 'freelancer')]
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'Offer by {self.freelancer_id} on job {self.job_id} ({self.status})'
+
+
 class Order(models.Model):
     STATUS_CHOICES = [
         ('pending_payment', 'Pending Payment'),
         ('funded', 'Funded'),
         ('delivered', 'Delivered'),
+        ('disputed', 'Disputed'),
         ('approved', 'Approved'),
         ('released', 'Released'),
         ('rejected', 'Rejected'),
@@ -21,8 +57,16 @@ class Order(models.Model):
     freelancer = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='orders_as_freelancer',
     )
-    gig = models.ForeignKey('gigs.Gig', on_delete=models.PROTECT)
-    tier = models.CharField(max_length=10, choices=[('basic', 'Basic'), ('pro', 'Pro')])
+    # Exactly one of gig or offer will be set
+    gig = models.ForeignKey(
+        'gigs.Gig', null=True, blank=True, on_delete=models.PROTECT, related_name='orders',
+    )
+    offer = models.OneToOneField(
+        Offer, null=True, blank=True, on_delete=models.PROTECT, related_name='order',
+    )
+    tier = models.CharField(
+        max_length=10, choices=[('basic', 'Basic'), ('pro', 'Pro')], blank=True,
+    )
     amount = models.PositiveIntegerField()
     platform_fee = models.PositiveIntegerField()
     freelancer_amount = models.PositiveIntegerField()
@@ -46,15 +90,30 @@ class Order(models.Model):
     def __str__(self):
         return f'Order {self.id} ({self.status})'
 
+    @property
+    def title(self):
+        if self.offer_id and self.offer:
+            return self.offer.job.title
+        if self.gig_id and self.gig:
+            return self.gig.title
+        return 'Order'
+
+    @property
+    def delivery_days(self):
+        if self.offer_id and self.offer:
+            return self.offer.delivery_days
+        if self.gig_id and self.gig:
+            return self.gig.delivery_days
+        return 3
+
 
 class Delivery(models.Model):
-    """Freelancer's work submission for an order (section 10.6)."""
     order = models.OneToOneField(
         Order, on_delete=models.PROTECT, related_name='delivery',
     )
     message = models.TextField(max_length=500)
     links = models.JSONField(default=list)        # ≤3 https:// URLs
-    screenshots = models.JSONField(default=list)  # ≤3 R2 public URLs
+    screenshots = models.JSONField(default=list)  # ≤3 R2 public image URLs
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -64,8 +123,40 @@ class Delivery(models.Model):
         return f'Delivery for order {self.order_id}'
 
 
+class Dispute(models.Model):
+    RESOLUTION_REFUND = 'refund'
+    RESOLUTION_RELEASE = 'release'
+
+    STATUS_CHOICES = [
+        ('open', 'Open'),
+        ('resolved', 'Resolved'),
+    ]
+    RESOLUTION_CHOICES = [
+        (RESOLUTION_REFUND, 'Refund Client'),
+        (RESOLUTION_RELEASE, 'Release to Freelancer'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    order = models.OneToOneField(Order, on_delete=models.PROTECT, related_name='dispute')
+    raised_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='disputes_raised',
+    )
+    reason = models.TextField()
+    status = models.CharField(max_length=16, choices=STATUS_CHOICES, default='open')
+    admin_notes = models.TextField(blank=True)
+    resolution = models.CharField(max_length=16, choices=RESOLUTION_CHOICES, blank=True)
+    resolved_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'disputes'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'Dispute on order {self.order_id} ({self.status})'
+
+
 class WebhookEvent(models.Model):
-    """Idempotency log for Paystack webhook deliveries (section 10.10)."""
     paystack_event_id = models.CharField(max_length=128, unique=True)
     event_type = models.CharField(max_length=64)
     payload = models.JSONField()

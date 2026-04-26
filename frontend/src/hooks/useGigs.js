@@ -1,5 +1,6 @@
 import { useInfiniteQuery, useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '../lib/api'
+import { useAuth } from '../context/AuthContext'
 
 function buildGigsParams(filters = {}, page = 1) {
   const params = new URLSearchParams({ page })
@@ -48,9 +49,11 @@ export function useFreelancer(id) {
 }
 
 export function useSaved() {
+  const { user } = useAuth()
   return useQuery({
     queryKey: ['saved'],
     queryFn: () => api.get('/saved/'),
+    enabled: !!user,
   })
 }
 

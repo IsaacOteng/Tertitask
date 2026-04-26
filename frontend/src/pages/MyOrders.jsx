@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import { ShoppingBag, ChevronRight } from 'lucide-react'
-import { useMyOrders } from '../hooks/useOrder'
+import { useOrders } from '../hooks/useOrders'
 import OrderStatusBadge from '../components/OrderStatusBadge'
 import { useDocumentTitle } from '../hooks/useDocumentTitle'
 
@@ -28,7 +28,7 @@ function OrderRowSkeleton() {
 
 export default function MyOrders() {
   useDocumentTitle('My Orders')
-  const { data: orders, isLoading, error } = useMyOrders()
+  const { data: orders, isLoading, error } = useOrders()
 
   return (
     <div className="min-h-screen bg-bg-subtle">
@@ -60,7 +60,7 @@ export default function MyOrders() {
             </div>
             <p className="font-display text-fs-h3 text-ink mb-2">No orders yet</p>
             <p className="text-fs-body text-ink-muted mb-6">
-              Browse gigs and place your first order.
+              Browse gigs or post a task to get started.
             </p>
             <Link
               to="/browse"
@@ -81,10 +81,11 @@ export default function MyOrders() {
               >
                 <div className="flex-1 min-w-0">
                   <p className="text-fs-body font-semibold text-ink truncate group-hover:text-brand-ink transition-colors">
-                    {order.gig_title ?? `Order #${order.id.slice(0, 8)}`}
+                    {order.title || `Order #${order.id.slice(0, 8)}`}
                   </p>
                   <p className="text-fs-small text-ink-muted mt-0.5">
-                    {fmt(order.created_at)} · {order.tier} package
+                    {fmt(order.created_at)}
+                    {order.freelancer?.full_name ? ` · ${order.freelancer.full_name}` : ''}
                   </p>
                 </div>
                 <div className="flex items-center gap-4 shrink-0">

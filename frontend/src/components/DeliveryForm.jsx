@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { presignAndUpload } from '../lib/uploader'
-import { useDeliver } from '../hooks/useOrder'
+import { useDeliver } from '../hooks/useOrders'
 
 const MAX_MESSAGE = 500
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp']
@@ -75,7 +75,7 @@ export default function DeliveryForm({ orderId }) {
         screenshots: uploadedUrls,
       })
       setToast('Delivered. Waiting for client approval.')
-      setTimeout(() => navigate(`/sales/${orderId}`, { replace: true }), 1500)
+      setTimeout(() => navigate(`/orders/${orderId}`, { replace: true }), 1500)
     } catch (err) {
       setError(err.body?.detail || 'Submission failed. Please try again.')
     }

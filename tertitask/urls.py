@@ -18,4 +18,5 @@ urlpatterns = [
     path('api/', include('uploads.urls')),
     path('api/', include('jobs.urls')),
     path('api/', include('conversations.urls')),
+    path('api/', include('notifications.urls')),
 ]

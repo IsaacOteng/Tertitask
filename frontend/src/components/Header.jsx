@@ -3,7 +3,8 @@ import { createPortal } from 'react-dom'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useUnreadCount } from '../hooks/useConversations'
-import { LayoutDashboard, Bookmark, ShoppingBag, BarChart2, LogOut, User, Package, PlusCircle, Pencil, MessageCircle, Trash2 } from 'lucide-react'
+import { useUnreadNotificationCount, useNotifications, useMarkNotificationsRead, useNotificationSocket } from '../hooks/useNotifications'
+import { LayoutDashboard, Bookmark, ShoppingBag, BarChart2, LogOut, User, Package, PlusCircle, Pencil, MessageCircle, Trash2, Bell } from 'lucide-react'
 
 const FREELANCER_NAV = [
   { label: 'My profile',   to: '/me',        icon: User },
@@ -162,6 +163,78 @@ function AvatarMenu({ me, onSignOut, onDeleteAccount }) {
   )
 }
 
+function NotificationBell({ user }) {
+  const count = useUnreadNotificationCount()
+  const { data: notifications = [] } = useNotifications()
+  const markRead = useMarkNotificationsRead()
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+  useNotificationSocket(!!user)
+
+  useEffect(() => {
+    function handleClick(e) {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
+
+  function handleOpen() {
+    setOpen((v) => !v)
+    if (!open && count > 0) markRead.mutate()
+  }
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        onClick={handleOpen}
+        className="relative flex items-center justify-center w-8 h-8 rounded-input text-ink-soft hover:text-ink hover:bg-bg-subtle transition-colors"
+        aria-label="Notifications"
+      >
+        <Bell size={15} />
+        {count > 0 && (
+          <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-brand text-white text-[10px] font-bold flex items-center justify-center leading-none">
+            {count > 9 ? '9+' : count}
+          </span>
+        )}
+      </button>
+
+      {open && (
+        <div className="absolute right-0 top-full mt-2 w-80 bg-bg rounded-card border border-line shadow-elevated z-50 overflow-hidden">
+          <div className="px-4 py-3 border-b border-line bg-bg-subtle flex items-center justify-between">
+            <p className="text-fs-small font-semibold text-ink">Notifications</p>
+          </div>
+          <div className="max-h-80 overflow-y-auto divide-y divide-line">
+            {notifications.length === 0 ? (
+              <p className="text-center text-fs-small text-ink-muted py-8">No notifications yet</p>
+            ) : (
+              notifications.slice(0, 20).map((n) => (
+                <NotificationItem key={n.id} n={n} onClose={() => setOpen(false)} />
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function NotificationItem({ n, onClose }) {
+  const to = n.data?.order_id ? `/orders/${n.data.order_id}` :
+             n.data?.job_id ? `/jobs/${n.data.job_id}` : null
+
+  const content = (
+    <div className={`px-4 py-3 hover:bg-bg-subtle transition-colors ${!n.read_at ? 'bg-brand/5' : ''}`}>
+      <p className="text-fs-small font-semibold text-ink leading-snug">{n.title}</p>
+      {n.body && <p className="text-fs-tiny text-ink-muted mt-0.5 line-clamp-2">{n.body}</p>}
+      <p className="text-[10px] text-ink-muted mt-1">{new Date(n.created_at).toLocaleString('en-GH', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</p>
+    </div>
+  )
+
+  if (to) return <Link to={to} onClick={onClose}>{content}</Link>
+  return <div>{content}</div>
+}
+
 export default function Header() {
   const { user, me, loading, openSignIn, signOut, deleteAccount } = useAuth()
   const navigate = useNavigate()
@@ -227,6 +300,9 @@ export default function Header() {
               </Link>
             ))}
           </div>
+
+          {/* Notification bell */}
+          {user && <NotificationBell user={user} />}
 
           {/* Messages button — only when logged in */}
           {user && (

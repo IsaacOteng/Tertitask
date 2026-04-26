@@ -23,7 +23,7 @@ class PresignView(APIView):
         resource_id  = request.data.get('resource_id')  # gig_id, order_id, or None
 
         # ── Validate inputs ───────────────────────────────────────────────────
-        if purpose not in ('avatar', 'cover', 'gig_cover', 'gig_portfolio', 'delivery', 'job_image', 'message_image'):
+        if purpose not in ('avatar', 'cover', 'gig_cover', 'gig_portfolio', 'delivery', 'job_image', 'message_image', 'requirement'):
             return Response({'detail': 'Invalid purpose.'}, status=status.HTTP_400_BAD_REQUEST)
 
         if content_type not in ALLOWED_CONTENT_TYPES:
@@ -83,6 +83,11 @@ class PresignView(APIView):
             bucket = settings.R2_PUBLIC_BUCKET
             base_url = settings.R2_PUBLIC_BASE_URL
             key = f'messages/{uuid.uuid4()}.{ext}'
+
+        elif purpose == 'requirement':
+            bucket = settings.R2_PUBLIC_BUCKET
+            base_url = settings.R2_PUBLIC_BASE_URL
+            key = f'requirements/{user.id}/{uuid.uuid4()}.{ext}'
 
         elif purpose == 'delivery':
             from orders.models import Order

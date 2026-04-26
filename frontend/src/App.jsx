@@ -63,7 +63,7 @@ function AppRoutes() {
         <Route path="/me/gigs/:id/edit" element={<AuthRoute element={<GigForm />} />} />
         <Route path="/me/saved" element={<AuthRoute element={<Saved />} />} />
         <Route path="/order/:id/checkout" element={<AuthRoute element={<Checkout />} />} />
-        <Route path="/order/:id/return" element={<AuthRoute element={<PaymentReturn />} />} />
+        <Route path="/orders/:id/return" element={<AuthRoute element={<PaymentReturn />} />} />
         <Route path="/orders" element={<AuthRoute element={<MyOrders />} />} />
         <Route path="/orders/:id" element={<AuthRoute element={<OrderDetail />} />} />
         <Route path="/sales" element={<AuthRoute element={<MySales />} />} />
@@ -90,7 +90,7 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <BrowserRouter>
+        <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
           <AppRoutes />
         </BrowserRouter>
       </AuthProvider>

@@ -17,9 +17,10 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from gigs.models import Gig
+from jobs.models import JobPost
 from orders import paystack as ps
-from orders.models import Delivery, Order, WebhookEvent
-from orders.serializers import OrderSerializer
+from orders.models import Delivery, Dispute, Offer, Order, WebhookEvent
+from orders.serializers import OfferSerializer, OrderSerializer, DisputeSerializer
 from orders.state_machine import IllegalTransition, transition
 from payouts.models import LedgerEntry
 
@@ -30,7 +31,9 @@ logger = logging.getLogger(__name__)
 
 def _get_order_or_404(pk):
     try:
-        return Order.objects.select_related('gig', 'client', 'freelancer').get(pk=pk)
+        return Order.objects.select_related(
+            'gig', 'client', 'freelancer', 'offer__job',
+        ).get(pk=pk)
     except Order.DoesNotExist:
         raise NotFound()
 
@@ -45,7 +48,6 @@ def _write_earning_pending(order):
 
 
 def _do_approve(order):
-    """Shared logic for approve view and auto-approve cron."""
     with transaction.atomic():
         now = timezone.now()
         order = transition(order, 'approved')
@@ -55,7 +57,15 @@ def _do_approve(order):
     return order
 
 
-# ── Order create ──────────────────────────────────────────────────────────────
+def _notify(user, type, title, body='', data=None):
+    try:
+        from notifications.utils import notify
+        notify(user, type, title, body=body, data=data or {})
+    except Exception:
+        logger.exception('Failed to send notification %s to user %s', type, user.id)
+
+
+# ── Gig Order create ──────────────────────────────────────────────────────────
 
 class OrderCreateView(APIView):
     permission_classes = [IsAuthenticated]
@@ -64,7 +74,6 @@ class OrderCreateView(APIView):
         gig_id = request.data.get('gig_id')
         tier = request.data.get('tier', 'basic')
         requirements = request.data.get('requirements', '')
-        # Any client-supplied 'amount' is deliberately ignored here.
 
         if tier not in ('basic', 'pro'):
             return Response({'detail': 'tier must be basic or pro.'}, status=status.HTTP_400_BAD_REQUEST)
@@ -80,7 +89,6 @@ class OrderCreateView(APIView):
         if tier == 'pro' and gig.price_pro is None:
             return Response({'detail': 'This gig does not offer a pro tier.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Server-computed amount — NEVER from request body (section 20)
         amount = gig.price_basic if tier == 'basic' else gig.price_pro
         platform_fee = round(amount * settings.PLATFORM_FEE_PERCENT / 100)
         freelancer_amount = amount - platform_fee
@@ -104,7 +112,7 @@ class OrderCreateView(APIView):
                 reference=paystack_reference,
                 amount=amount,
                 email=request.user.email,
-                callback_url=f'{settings.FRONTEND_URL}/order/{order.id}/return',
+                callback_url=f'{settings.FRONTEND_URL}/orders/{order.id}/return',
             )
         except ps.PaystackError as exc:
             order.delete()
@@ -116,6 +124,168 @@ class OrderCreateView(APIView):
         )
 
 
+# ── Offers (job board) ────────────────────────────────────────────────────────
+
+class JobOfferListCreateView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, job_id):
+        """Client-only: list all offers on their job."""
+        try:
+            job = JobPost.objects.get(pk=job_id, owner=request.user)
+        except JobPost.DoesNotExist:
+            raise PermissionDenied()
+        offers = Offer.objects.filter(job=job).select_related('freelancer')
+        return Response(OfferSerializer(offers, many=True).data)
+
+    def post(self, request, job_id):
+        """Freelancer submits an offer on a job."""
+        try:
+            job = JobPost.objects.select_related('owner').get(pk=job_id, is_open=True)
+        except JobPost.DoesNotExist:
+            return Response({'detail': 'Job not found or closed.'}, status=status.HTTP_404_NOT_FOUND)
+
+        if job.owner == request.user:
+            return Response({'detail': 'You cannot offer on your own job.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        price_ghs = request.data.get('price')
+        delivery_days = request.data.get('delivery_days')
+        message = request.data.get('message', '').strip()
+
+        if not price_ghs or not delivery_days or not message:
+            return Response({'detail': 'price, delivery_days, and message are required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            price = round(float(price_ghs) * 100)
+            delivery_days = int(delivery_days)
+        except (ValueError, TypeError):
+            return Response({'detail': 'Invalid price or delivery_days.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if price <= 0 or delivery_days <= 0:
+            return Response({'detail': 'price and delivery_days must be positive.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            offer = Offer.objects.create(
+                job=job,
+                freelancer=request.user,
+                price=price,
+                delivery_days=delivery_days,
+                message=message,
+            )
+        except IntegrityError:
+            return Response({'detail': 'You have already submitted an offer for this job.'}, status=status.HTTP_409_CONFLICT)
+
+        _notify(
+            job.owner, 'offer_received',
+            f'New offer on "{job.title}"',
+            body=f'{request.user.full_name} offered GHS {price_ghs} in {delivery_days} day(s).',
+            data={'job_id': str(job.id), 'offer_id': str(offer.id)},
+        )
+
+        return Response(OfferSerializer(offer).data, status=status.HTTP_201_CREATED)
+
+
+class MyOfferOnJobView(APIView):
+    """Freelancer checks their own offer status on a specific job."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, job_id):
+        offer = Offer.objects.filter(job_id=job_id, freelancer=request.user).first()
+        if not offer:
+            return Response(None)
+        return Response(OfferSerializer(offer).data)
+
+    def delete(self, request, job_id):
+        """Withdraw a pending offer."""
+        offer = Offer.objects.filter(job_id=job_id, freelancer=request.user, status='pending').first()
+        if not offer:
+            return Response({'detail': 'No withdrawable offer found.'}, status=status.HTTP_404_NOT_FOUND)
+        offer.status = 'withdrawn'
+        offer.save(update_fields=['status'])
+        return Response({'status': 'withdrawn'})
+
+
+class AcceptOfferView(APIView):
+    """Client accepts an offer → creates order + Paystack payment."""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, offer_id):
+        try:
+            offer = Offer.objects.select_related('job__owner', 'freelancer').get(
+                pk=offer_id, job__owner=request.user, status='pending',
+            )
+        except Offer.DoesNotExist:
+            return Response({'detail': 'Offer not found or already actioned.'}, status=status.HTTP_404_NOT_FOUND)
+
+        amount = offer.price
+        platform_fee = round(amount * settings.PLATFORM_FEE_PERCENT / 100)
+        freelancer_amount = amount - platform_fee
+        paystack_reference = uuid.uuid4().hex
+
+        with transaction.atomic():
+            order = Order.objects.create(
+                client=request.user,
+                freelancer=offer.freelancer,
+                offer=offer,
+                amount=amount,
+                platform_fee=platform_fee,
+                freelancer_amount=freelancer_amount,
+                status='pending_payment',
+                paystack_reference=paystack_reference,
+            )
+            offer.status = 'accepted'
+            offer.save(update_fields=['status'])
+
+        try:
+            ps_data = ps.initialize(
+                reference=paystack_reference,
+                amount=amount,
+                email=request.user.email,
+                callback_url=f'{settings.FRONTEND_URL}/orders/{order.id}/return',
+            )
+        except ps.PaystackError as exc:
+            order.delete()
+            offer.status = 'pending'
+            offer.save(update_fields=['status'])
+            return Response({'detail': str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
+
+        _notify(
+            offer.freelancer, 'offer_accepted',
+            f'Your offer was accepted!',
+            body=f'{request.user.full_name} accepted your offer on "{offer.job.title}". Complete payment to start.',
+            data={'order_id': str(order.id), 'job_id': str(offer.job_id)},
+        )
+
+        return Response(
+            {'order_id': str(order.id), 'authorization_url': ps_data['authorization_url']},
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class RejectOfferView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, offer_id):
+        try:
+            offer = Offer.objects.select_related('job__owner', 'freelancer').get(
+                pk=offer_id, job__owner=request.user, status='pending',
+            )
+        except Offer.DoesNotExist:
+            return Response({'detail': 'Offer not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        offer.status = 'rejected'
+        offer.save(update_fields=['status'])
+
+        _notify(
+            offer.freelancer, 'offer_rejected',
+            f'Offer not selected',
+            body=f'Your offer on "{offer.job.title}" was not selected this time.',
+            data={'job_id': str(offer.job_id)},
+        )
+
+        return Response({'status': 'rejected'})
+
+
 # ── Order list / detail ───────────────────────────────────────────────────────
 
 class OrderListView(APIView):
@@ -125,8 +295,8 @@ class OrderListView(APIView):
         qs = (
             Order.objects
             .filter(client=request.user)
-            .select_related('gig', 'client', 'freelancer')
-            .prefetch_related('delivery')
+            .select_related('gig', 'client', 'freelancer', 'offer__job')
+            .prefetch_related('delivery', 'dispute')
             .order_by('-created_at')
         )
         return Response(OrderSerializer(qs, many=True).data)
@@ -139,8 +309,8 @@ class SalesListView(APIView):
         qs = (
             Order.objects
             .filter(freelancer=request.user)
-            .select_related('gig', 'client', 'freelancer')
-            .prefetch_related('delivery')
+            .select_related('gig', 'client', 'freelancer', 'offer__job')
+            .prefetch_related('delivery', 'dispute')
             .order_by('-created_at')
         )
         return Response(OrderSerializer(qs, many=True).data)
@@ -156,7 +326,7 @@ class OrderDetailView(APIView):
         return Response(OrderSerializer(order).data)
 
 
-# ── Verify (Phase 4) ──────────────────────────────────────────────────────────
+# ── Verify ────────────────────────────────────────────────────────────────────
 
 class OrderVerifyView(APIView):
     permission_classes = [IsAuthenticated]
@@ -174,6 +344,14 @@ class OrderVerifyView(APIView):
         if data.get('status') == 'success':
             try:
                 order = transition(order, 'funded')
+                _notify(order.freelancer, 'order_funded',
+                    'New order — payment received!',
+                    body=f'"{order.title}" is now active. Get started!',
+                    data={'order_id': str(order.id)})
+                _notify(order.client, 'order_funded',
+                    'Payment confirmed',
+                    body=f'Your order for "{order.title}" is now active.',
+                    data={'order_id': str(order.id)})
             except IllegalTransition:
                 order.refresh_from_db()
         return Response(OrderSerializer(order).data)
@@ -186,7 +364,6 @@ class DeliverView(APIView):
 
     def post(self, request, pk):
         order = _get_order_or_404(pk)
-
         if order.freelancer != request.user:
             raise PermissionDenied()
         if order.status != 'funded':
@@ -206,8 +383,6 @@ class DeliverView(APIView):
         for link in links:
             if not str(link).startswith(('http://', 'https://')):
                 raise ValidationError({'links': 'Each link must start with http(s)://'})
-        if len(message) > 500:
-            raise ValidationError({'message': 'Maximum 500 characters.'})
         if not message and not links and not screenshots:
             raise ValidationError({'detail': 'Provide a message, link, or screenshot.'})
 
@@ -220,14 +395,16 @@ class DeliverView(APIView):
                     screenshots=[s for s in screenshots if s],
                 )
             except IntegrityError:
-                return Response(
-                    {'detail': 'Order has already been delivered.'},
-                    status=status.HTTP_409_CONFLICT,
-                )
+                return Response({'detail': 'Order has already been delivered.'}, status=status.HTTP_409_CONFLICT)
             now = timezone.now()
             order = transition(order, 'delivered')
             order.auto_approve_at = now + timedelta(days=settings.AUTO_APPROVE_DAYS)
             order.save(update_fields=['auto_approve_at'])
+
+        _notify(order.client, 'order_delivered',
+            f'Delivery ready for review',
+            body=f'{order.freelancer.full_name} has submitted work for "{order.title}".',
+            data={'order_id': str(order.id)})
 
         order.refresh_from_db()
         return Response(OrderSerializer(order).data, status=status.HTTP_201_CREATED)
@@ -248,6 +425,10 @@ class ApproveView(APIView):
                 status=status.HTTP_409_CONFLICT,
             )
         order = _do_approve(order)
+        _notify(order.freelancer, 'order_approved',
+            'Delivery approved!',
+            body=f'"{order.title}" was approved. Earnings are on their way.',
+            data={'order_id': str(order.id)})
         return Response(OrderSerializer(order).data)
 
 
@@ -269,11 +450,74 @@ class RejectView(APIView):
             ps.refund(order.paystack_reference)
         except ps.PaystackError as exc:
             return Response({'detail': str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
-
         with transaction.atomic():
             order = transition(order, 'rejected')
-            # No ledger entry on rejection
+        _notify(order.freelancer, 'order_rejected',
+            'Delivery rejected',
+            body=f'The client rejected the delivery for "{order.title}".',
+            data={'order_id': str(order.id)})
+        return Response(OrderSerializer(order).data)
 
+
+# ── Dispute ───────────────────────────────────────────────────────────────────
+
+class DisputeView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        order = _get_order_or_404(pk)
+        if request.user not in (order.client, order.freelancer):
+            raise PermissionDenied()
+        if order.status != 'delivered':
+            return Response(
+                {'detail': 'A dispute can only be raised on a delivered order.'},
+                status=status.HTTP_409_CONFLICT,
+            )
+        reason = request.data.get('reason', '').strip()
+        if not reason:
+            return Response({'detail': 'reason is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            with transaction.atomic():
+                Dispute.objects.create(order=order, raised_by=request.user, reason=reason)
+                order = transition(order, 'disputed')
+        except IntegrityError:
+            return Response({'detail': 'A dispute already exists for this order.'}, status=status.HTTP_409_CONFLICT)
+
+        other = order.freelancer if request.user == order.client else order.client
+        _notify(other, 'order_disputed',
+            'A dispute has been raised',
+            body=f'A dispute was opened on order "{order.title}". Admin will review.',
+            data={'order_id': str(order.id)})
+
+        order.refresh_from_db()
+        return Response(OrderSerializer(order).data, status=status.HTTP_201_CREATED)
+
+
+# ── Requirements (set after payment) ─────────────────────────────────────────
+
+class OrderRequirementsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request, pk):
+        order = _get_order_or_404(pk)
+        if order.client != request.user:
+            raise PermissionDenied()
+        if order.status != 'funded':
+            return Response(
+                {'detail': 'Requirements can only be set on a funded order.'},
+                status=status.HTTP_409_CONFLICT,
+            )
+        if order.requirements:
+            return Response(
+                {'detail': 'Requirements already set.'},
+                status=status.HTTP_409_CONFLICT,
+            )
+        requirements = request.data.get('requirements', '').strip()
+        if not requirements:
+            return Response({'detail': 'requirements is required.'}, status=status.HTTP_400_BAD_REQUEST)
+        order.requirements = requirements
+        order.save(update_fields=['requirements'])
         return Response(OrderSerializer(order).data)
 
 
@@ -291,9 +535,8 @@ class CancelView(APIView):
                 {'detail': f'Order must be funded to cancel (current: {order.status}).'},
                 status=status.HTTP_409_CONFLICT,
             )
-        # Only cancellable after gig.delivery_days + 3 calendar days
         if order.paid_at:
-            grace = order.paid_at + timedelta(days=order.gig.delivery_days + 3)
+            grace = order.paid_at + timedelta(days=order.delivery_days + 3)
             if timezone.now() < grace:
                 return Response(
                     {'detail': 'Order cannot be cancelled until the delivery deadline has passed.'},
@@ -303,14 +546,12 @@ class CancelView(APIView):
             ps.refund(order.paystack_reference)
         except ps.PaystackError as exc:
             return Response({'detail': str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
-
         with transaction.atomic():
             order = transition(order, 'cancelled')
-
         return Response(OrderSerializer(order).data)
 
 
-# ── Paystack webhook (Phase 4) ────────────────────────────────────────────────
+# ── Paystack webhook ──────────────────────────────────────────────────────────
 
 @method_decorator(csrf_exempt, name='dispatch')
 class PaystackWebhookView(View):
@@ -356,12 +597,19 @@ class PaystackWebhookView(View):
         if event_type == 'charge.success':
             reference = data.get('reference', '')
             try:
-                order = Order.objects.select_for_update().get(paystack_reference=reference)
+                order = Order.objects.select_related('client', 'freelancer', 'offer__job', 'gig').select_for_update().get(paystack_reference=reference)
             except Order.DoesNotExist:
-                logger.warning('charge.success for unknown reference %s', reference)
                 return
             if order.status == 'pending_payment':
                 transition(order, 'funded')
+                _notify(order.freelancer, 'order_funded',
+                    'New order — payment received!',
+                    body=f'"{order.title}" is now active.',
+                    data={'order_id': str(order.id)})
+                _notify(order.client, 'order_funded',
+                    'Payment confirmed',
+                    body=f'Your order for "{order.title}" is now active.',
+                    data={'order_id': str(order.id)})
 
         elif event_type == 'charge.failed':
             logger.info('charge.failed for reference %s', data.get('reference', ''))
@@ -379,7 +627,6 @@ class PaystackWebhookView(View):
 
         elif event_type == 'transfer.success':
             self._handle_transfer_success(data)
-
         elif event_type == 'transfer.failed':
             self._handle_transfer_failed(data)
 
@@ -389,7 +636,6 @@ class PaystackWebhookView(View):
         try:
             payout = Payout.objects.select_for_update().get(paystack_transfer_code=transfer_code)
         except Payout.DoesNotExist:
-            logger.warning('transfer.success for unknown transfer_code %s', transfer_code)
             return
         if payout.status != 'success':
             payout.status = 'success'
@@ -402,14 +648,12 @@ class PaystackWebhookView(View):
         try:
             payout = Payout.objects.select_for_update().get(paystack_transfer_code=transfer_code)
         except Payout.DoesNotExist:
-            logger.warning('transfer.failed for unknown transfer_code %s', transfer_code)
             return
         if payout.status == 'failed':
-            return  # already handled
+            return
         payout.status = 'failed'
         payout.failure_reason = reason
         payout.save(update_fields=['status', 'failure_reason'])
-        # Reversal entry restores the available balance
         LedgerEntry.objects.create(
             user=payout.user,
             payout=payout,

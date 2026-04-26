@@ -3,11 +3,14 @@ import { Link, useParams, useNavigate } from 'react-router-dom'
 import {
   ArrowLeft, Tag, Calendar, Briefcase, User2, CheckCircle,
   Pencil, Trash2, ToggleLeft, ToggleRight, Loader2, LinkIcon, ExternalLink,
+  Send, MessageCircle, Clock, ChevronRight,
 } from 'lucide-react'
 import { useJob, useDeleteJob, useToggleJob } from '../hooks/useJobs'
 import { useAuth } from '../context/AuthContext'
 import { useDocumentTitle } from '../hooks/useDocumentTitle'
 import ApplyModal from '../components/ApplyModal'
+import SendOfferModal from '../components/SendOfferModal'
+import { useJobOffers, useMyOfferOnJob, useAcceptOffer, useRejectOffer } from '../hooks/useOrders'
 
 function formatBudget(min, max) {
   if (!min && !max) return null
@@ -32,19 +35,31 @@ export default function JobDetail() {
   const navigate = useNavigate()
   const { user, me, openSignIn } = useAuth()
   const [showContact, setShowContact] = useState(false)
+  const [showOffer, setShowOffer] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
 
   const { data: job, isLoading, isError } = useJob(id)
   const deleteMutation = useDeleteJob()
   const toggleMutation = useToggleJob()
 
-  useDocumentTitle(job?.title || 'Job')
-
   const isOwner = me && job && String(me.id) === String(job.owner?.id)
+
+  // Offers — only fetch when relevant
+  const { data: offers = [] } = useJobOffers(isOwner ? id : null)
+  const { data: myOffer } = useMyOfferOnJob(!isOwner && user ? id : null)
+  const acceptOffer = useAcceptOffer()
+  const rejectOffer = useRejectOffer(id)
+
+  useDocumentTitle(job?.title || 'Job')
 
   function handleContact() {
     if (!user) { openSignIn(); return }
     setShowContact(true)
+  }
+
+  function handleSendOffer() {
+    if (!user) { openSignIn(); return }
+    setShowOffer(true)
   }
 
   async function handleDelete() {
@@ -287,13 +302,35 @@ export default function JobDetail() {
                 View full profile
               </Link>
               {!isOwner && job.is_open && (
-                <button
-                  onClick={handleContact}
-                  className="w-full h-10 rounded-input bg-brand text-white font-semibold text-fs-small hover:bg-brand-ink transition-colors flex items-center justify-center gap-2"
-                >
-                  <CheckCircle size={14} />
-                  Apply / Contact
-                </button>
+                <div className="space-y-2">
+                  {myOffer ? (
+                    <div className={`w-full rounded-input px-3 py-2.5 text-fs-small text-center font-medium border ${
+                      myOffer.status === 'pending' ? 'bg-brand/5 border-brand/20 text-brand' :
+                      myOffer.status === 'accepted' ? 'bg-green-50 border-green-200 text-green-700' :
+                      'bg-bg-subtle border-line text-ink-muted'
+                    }`}>
+                      {myOffer.status === 'pending' && `Offer sent — GHS ${myOffer.price_ghs} · ${myOffer.delivery_days}d`}
+                      {myOffer.status === 'accepted' && 'Offer accepted — check your orders'}
+                      {myOffer.status === 'rejected' && 'Offer not selected'}
+                      {myOffer.status === 'withdrawn' && 'Offer withdrawn'}
+                    </div>
+                  ) : (
+                    <button
+                      onClick={handleSendOffer}
+                      className="w-full h-10 rounded-input bg-brand text-white font-semibold text-fs-small hover:bg-brand-ink transition-colors flex items-center justify-center gap-2"
+                    >
+                      <Send size={14} />
+                      Send offer
+                    </button>
+                  )}
+                  <button
+                    onClick={handleContact}
+                    className="w-full h-10 rounded-input border border-line text-ink-soft text-fs-small font-medium hover:text-ink hover:border-ink-soft transition-colors flex items-center justify-center gap-2"
+                  >
+                    <MessageCircle size={14} />
+                    Contact client
+                  </button>
+                </div>
               )}
             </div>
 
@@ -311,11 +348,93 @@ export default function JobDetail() {
         </div>
       </div>
 
+      {/* Offers panel — visible to job owner only */}
+      {isOwner && (
+        <div className="max-w-content mx-auto px-4 pb-12">
+          <h2 className="text-fs-body font-semibold text-ink mb-4">
+            Offers received ({offers.length})
+          </h2>
+          {offers.length === 0 ? (
+            <div className="bg-bg rounded-card border border-line p-8 text-center text-ink-muted">
+              <Send size={28} className="mx-auto mb-2 opacity-30" />
+              <p className="text-fs-small">No offers yet</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {offers.map((offer) => (
+                <div key={offer.id} className="bg-bg rounded-card border border-line p-5">
+                  <div className="flex items-start justify-between gap-4 mb-3">
+                    <div className="flex items-center gap-3">
+                      {offer.freelancer_avatar ? (
+                        <img src={offer.freelancer_avatar} alt="" className="w-10 h-10 rounded-full object-cover shrink-0" />
+                      ) : (
+                        <div className="w-10 h-10 rounded-full bg-brand/10 text-brand font-bold flex items-center justify-center shrink-0">
+                          {(offer.freelancer_name || '?')[0].toUpperCase()}
+                        </div>
+                      )}
+                      <div>
+                        <Link to={`/freelancer/${offer.freelancer_id}`} className="font-semibold text-fs-small text-ink hover:text-brand transition-colors">
+                          {offer.freelancer_name}
+                        </Link>
+                        <div className="flex items-center gap-3 mt-0.5 text-fs-tiny text-ink-muted">
+                          <span className="font-medium text-ink-soft">GHS {offer.price_ghs?.toLocaleString('en-GH')}</span>
+                          <span className="flex items-center gap-1"><Clock size={10} />{offer.delivery_days} day{offer.delivery_days !== 1 ? 's' : ''}</span>
+                        </div>
+                      </div>
+                    </div>
+                    <span className={`text-fs-tiny font-semibold px-2.5 py-1 rounded-full capitalize ${
+                      offer.status === 'pending' ? 'bg-brand/5 text-brand border border-brand/20' :
+                      offer.status === 'accepted' ? 'bg-green-50 text-green-700 border border-green-200' :
+                      'bg-bg-subtle text-ink-muted border border-line'
+                    }`}>{offer.status}</span>
+                  </div>
+                  <p className="text-fs-small text-ink-soft leading-relaxed mb-4">{offer.message}</p>
+                  {offer.status === 'pending' && (
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => acceptOffer.mutate(offer.id)}
+                        disabled={acceptOffer.isPending}
+                        className="flex items-center gap-1.5 h-9 px-4 rounded-input bg-brand text-white font-semibold text-fs-small hover:bg-brand-ink transition-colors disabled:opacity-60"
+                      >
+                        {acceptOffer.isPending ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle size={13} />}
+                        Accept & Pay
+                      </button>
+                      <button
+                        onClick={() => rejectOffer.mutate(offer.id)}
+                        disabled={rejectOffer.isPending}
+                        className="h-9 px-4 rounded-input border border-line text-fs-small text-ink-soft hover:text-danger hover:border-danger transition-colors disabled:opacity-60"
+                      >
+                        Decline
+                      </button>
+                    </div>
+                  )}
+                  {offer.status === 'accepted' && offer.has_order && (
+                    <Link
+                      to={`/orders`}
+                      className="inline-flex items-center gap-1.5 text-fs-small text-brand hover:underline"
+                    >
+                      View order <ChevronRight size={13} />
+                    </Link>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {showContact && (
         <ApplyModal
           jobId={job.id}
           contextTitle={job.title}
           onClose={() => setShowContact(false)}
+        />
+      )}
+
+      {showOffer && (
+        <SendOfferModal
+          job={job}
+          onClose={() => setShowOffer(false)}
         />
       )}
     </div>

@@ -5,7 +5,8 @@ from django.utils import timezone
 VALID_TRANSITIONS = {
     'pending_payment': {'funded', 'cancelled'},
     'funded':          {'delivered', 'cancelled'},
-    'delivered':       {'approved', 'rejected'},
+    'delivered':       {'approved', 'rejected', 'disputed'},
+    'disputed':        {'approved', 'cancelled'},   # admin resolves
     'approved':        {'released'},
     'rejected':        {'cancelled'},
     'released':        set(),

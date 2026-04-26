@@ -1,13 +1,16 @@
-import { useState } from 'react'
+import { useState, useRef, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { Link, useParams } from 'react-router-dom'
 import {
   Heart, Clock, ArrowLeft, GraduationCap, CheckCircle,
   BookOpen, Briefcase, Calendar, Tag, LayoutGrid, Shield,
-  MessageCircle, ChevronRight, Link2, ExternalLink,
+  MessageCircle, ChevronRight, Link2, ExternalLink, Loader2, X,
 } from 'lucide-react'
 import { useGig, useFreelancer, useSaveGig, useUnsaveGig, useSaved } from '../hooks/useGigs'
+import { useCreateGigOrder } from '../hooks/useOrders'
 import { useAuth } from '../context/AuthContext'
 import { useDocumentTitle } from '../hooks/useDocumentTitle'
+import { presignAndUpload } from '../lib/uploader'
 import ApplyModal from '../components/ApplyModal'
 import GigCard from '../components/GigCard'
 
@@ -37,7 +40,7 @@ function formatDate(iso) {
   return new Date(iso).toLocaleDateString('en-GH', { month: 'long', year: 'numeric' })
 }
 
-function PricingPanel({ gig, tier, setTier, onOrder, onContact, isSaved, onSave, isOwn }) {
+function PricingPanel({ gig, tier, setTier, onOrder, onContact, isSaved, onSave, isOwn, isOrdering, orderError }) {
   const hasPro = gig.price_pro != null
   const selectedPrice = tier === 'pro' && hasPro ? gig.price_pro : gig.price_basic
 
@@ -87,7 +90,7 @@ function PricingPanel({ gig, tier, setTier, onOrder, onContact, isSaved, onSave,
           </span>
         </div>
 
-        {/* Includes — from freelancer's "what you get" */}
+        {/* Includes */}
         {gig.what_you_get?.length > 0 && (
           <ul className="space-y-2.5 mb-6">
             {gig.what_you_get.map((item) => (
@@ -99,13 +102,33 @@ function PricingPanel({ gig, tier, setTier, onOrder, onContact, isSaved, onSave,
           </ul>
         )}
 
+        {/* Error */}
+        {orderError && (
+          <p className="text-fs-tiny text-danger mb-3">{orderError}</p>
+        )}
+
         {/* CTAs */}
-        <button
-          onClick={onOrder}
-          className="w-full h-12 rounded-input bg-brand text-white font-bold text-fs-body hover:bg-brand-ink transition-colors mb-2.5 shadow-glow"
-        >
-          Order Now — {formatPrice(selectedPrice)}
-        </button>
+        {isOwn ? (
+          <div className="w-full h-12 rounded-input bg-bg-subtle border border-line flex items-center justify-center mb-2.5">
+            <p className="text-fs-small text-ink-muted font-medium">This is your gig</p>
+          </div>
+        ) : (
+          <button
+            onClick={onOrder}
+            disabled={isOrdering}
+            className="w-full h-12 rounded-input bg-brand text-white font-bold text-fs-body hover:bg-brand-ink transition-colors mb-2.5 shadow-glow disabled:opacity-70 flex items-center justify-center gap-2"
+          >
+            {isOrdering ? (
+              <>
+                <Loader2 size={15} className="animate-spin" />
+                Redirecting to payment…
+              </>
+            ) : (
+              `Order Now — ${formatPrice(selectedPrice)}`
+            )}
+          </button>
+        )}
+
         {!isOwn && (
           <button
             onClick={onContact}
@@ -139,11 +162,199 @@ function PricingPanel({ gig, tier, setTier, onOrder, onContact, isSaved, onSave,
   )
 }
 
+const ALLOWED_IMG_TYPES = ['image/jpeg', 'image/png', 'image/webp']
+
+function RequirementsModal({ gig, tier, onClose, onSubmit, isSubmitting, orderError }) {
+  const [text, setText] = useState('')
+  const [links, setLinks] = useState(['', '', ''])
+  const [imagePreviews, setImagePreviews] = useState([]) // [{file, preview}]
+  const [dragOver, setDragOver] = useState(false)
+  const [localError, setLocalError] = useState(null)
+  const fileInputRef = useRef()
+  const selectedPrice = tier === 'pro' && gig.price_pro != null ? gig.price_pro : gig.price_basic
+
+  const addFiles = useCallback((files) => {
+    const remaining = 3 - imagePreviews.length
+    const toAdd = Array.from(files).slice(0, remaining)
+    const errs = []
+    const valid = toAdd.filter((f) => {
+      if (!ALLOWED_IMG_TYPES.includes(f.type)) { errs.push(`${f.name}: JPEG/PNG/WebP only`); return false }
+      if (f.size > 5 * 1024 * 1024) { errs.push(`${f.name}: max 5 MB`); return false }
+      return true
+    })
+    if (errs.length) { setLocalError(errs.join('. ')); return }
+    setLocalError(null)
+    setImagePreviews((prev) =>
+      [...prev, ...valid.map((f) => ({ file: f, preview: URL.createObjectURL(f) }))].slice(0, 3),
+    )
+  }, [imagePreviews.length])
+
+  function removeImage(idx) {
+    setImagePreviews((prev) => {
+      const next = [...prev]
+      URL.revokeObjectURL(next[idx].preview)
+      next.splice(idx, 1)
+      return next
+    })
+  }
+
+  function handleSubmit() {
+    for (const l of links.filter((l) => l.trim())) {
+      if (!l.trim().match(/^https?:\/\/.+/)) {
+        setLocalError('Links must start with https:// or http://')
+        return
+      }
+    }
+    setLocalError(null)
+    onSubmit({ text: text.trim(), links: links.filter((l) => l.trim()), imageFiles: imagePreviews.map((p) => p.file) })
+  }
+
+  const canSubmit = text.trim().length > 0 && !isSubmitting
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-ink/40 backdrop-blur-sm px-4 pb-4 sm:pb-0"
+      onClick={(e) => { if (e.target === e.currentTarget && !isSubmitting) onClose() }}
+    >
+      <div className="w-full max-w-lg bg-bg rounded-card border border-line shadow-elevated overflow-hidden max-h-[90vh] flex flex-col">
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-line shrink-0">
+          <div className="min-w-0">
+            <p className="font-semibold text-fs-body text-ink">What do you need?</p>
+            <p className="text-fs-tiny text-ink-muted truncate mt-0.5">{gig.title} · {formatPrice(selectedPrice)}</p>
+          </div>
+          <button
+            onClick={() => !isSubmitting && onClose()}
+            disabled={isSubmitting}
+            className="ml-3 shrink-0 w-7 h-7 flex items-center justify-center rounded-full hover:bg-bg-subtle text-ink-muted hover:text-ink transition-colors disabled:opacity-40"
+          >
+            <X size={15} />
+          </button>
+        </div>
+
+        {/* Body — scrollable */}
+        <div className="p-5 space-y-5 overflow-y-auto">
+          <p className="text-fs-small text-ink-soft leading-relaxed">
+            Describe exactly what you need. You can also attach reference links and images.
+            This is recorded with your order and used to review any disputes.
+          </p>
+
+          {/* Description */}
+          <div>
+            <label className="block text-fs-tiny font-semibold text-ink mb-1.5">
+              Description <span className="text-danger">*</span>
+            </label>
+            <textarea
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              placeholder="e.g. I need a logo for my clothing brand called 'Nova'. Blue and white, modern minimalist style, include the brand name…"
+              rows={4}
+              maxLength={1000}
+              autoFocus
+              className="w-full px-3 py-2.5 rounded-input border border-line bg-bg text-fs-small text-ink placeholder:text-ink-muted focus:outline-none focus:border-brand focus:ring-2 focus:ring-brand/15 resize-none"
+            />
+            <p className="text-fs-tiny text-ink-muted mt-1 text-right">{text.length}/1000</p>
+          </div>
+
+          {/* Reference links */}
+          <div>
+            <label className="block text-fs-tiny font-semibold text-ink mb-1.5">
+              Reference links <span className="text-fs-tiny font-normal text-ink-muted">(optional, up to 3)</span>
+            </label>
+            <div className="space-y-2">
+              {links.map((link, i) => (
+                <input
+                  key={i}
+                  type="url"
+                  value={link}
+                  onChange={(e) => { const next = [...links]; next[i] = e.target.value; setLinks(next) }}
+                  placeholder={`https://example.com/reference-${i + 1}`}
+                  className="w-full h-9 px-3 rounded-input border border-line bg-bg text-fs-small text-ink placeholder:text-ink-muted focus:outline-none focus:border-brand focus:ring-2 focus:ring-brand/15"
+                />
+              ))}
+            </div>
+          </div>
+
+          {/* Reference images */}
+          <div>
+            <label className="block text-fs-tiny font-semibold text-ink mb-1.5">
+              Reference images <span className="text-fs-tiny font-normal text-ink-muted">(optional, up to 3 · JPEG/PNG/WebP · max 5 MB)</span>
+            </label>
+            <div
+              onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={(e) => { e.preventDefault(); setDragOver(false); addFiles(e.dataTransfer.files) }}
+              onClick={() => imagePreviews.length < 3 && fileInputRef.current?.click()}
+              className={`border-2 border-dashed rounded-input p-4 text-center transition-colors ${
+                dragOver ? 'border-brand bg-brand/5' : 'border-line hover:border-brand/40'
+              } ${imagePreviews.length >= 3 ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+            >
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                accept="image/jpeg,image/png,image/webp"
+                className="hidden"
+                onChange={(e) => addFiles(e.target.files)}
+              />
+              <p className="text-fs-small text-ink-muted">
+                {imagePreviews.length >= 3 ? 'Maximum 3 images added' : 'Drag & drop or click to add images'}
+              </p>
+            </div>
+
+            {imagePreviews.length > 0 && (
+              <div className="grid grid-cols-3 gap-2 mt-2">
+                {imagePreviews.map((s, i) => (
+                  <div key={i} className="relative aspect-video rounded-input overflow-hidden bg-bg-subtle border border-line">
+                    <img src={s.preview} alt="" className="w-full h-full object-cover" />
+                    <button
+                      type="button"
+                      onClick={() => removeImage(i)}
+                      className="absolute top-1 right-1 bg-black/60 text-white rounded-full w-5 h-5 text-xs flex items-center justify-center hover:bg-black/80"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {(localError || orderError) && (
+            <p className="text-fs-tiny text-danger">{localError || orderError}</p>
+          )}
+
+          <div className="flex items-center justify-end gap-3 pb-1">
+            <button
+              type="button"
+              onClick={() => !isSubmitting && onClose()}
+              disabled={isSubmitting}
+              className="h-9 px-4 rounded-input border border-line text-fs-small font-medium text-ink-soft hover:text-ink hover:border-ink-soft transition-colors disabled:opacity-40"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSubmit}
+              disabled={!canSubmit}
+              className="flex items-center gap-2 h-9 px-5 rounded-input bg-brand text-white font-semibold text-fs-small hover:bg-brand-ink transition-colors disabled:opacity-60"
+            >
+              {isSubmitting ? <><Loader2 size={13} className="animate-spin" /> Uploading…</> : 'Continue to payment'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  )
+}
+
 export default function GigDetail() {
   const { id } = useParams()
   const { user, me, openSignIn } = useAuth()
   const [tier, setTier] = useState('basic')
   const [showContact, setShowContact] = useState(false)
+  const [showRequirements, setShowRequirements] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   useDocumentTitle(null)
 
@@ -154,6 +365,7 @@ export default function GigDetail() {
   const saveGig = useSaveGig()
   const unsaveGig = useUnsaveGig()
 
+  const createOrder = useCreateGigOrder()
   const isSaved = (savedData || []).some((s) => s.gig?.id === id)
 
   function handleSave() {
@@ -169,7 +381,26 @@ export default function GigDetail() {
 
   function handleOrder() {
     if (!user) { openSignIn(); return }
-    alert('Order creation is coming soon.')
+    setShowRequirements(true)
+  }
+
+  async function handleRequirementsSubmit({ text, links, imageFiles }) {
+    setIsSubmitting(true)
+    try {
+      const data = await createOrder.mutateAsync({ gig_id: id, tier })
+      const orderId = data.order_id
+      const imageUrls = await Promise.all(
+        imageFiles.map((f) => presignAndUpload(f, { purpose: 'requirement' }).then((r) => r.public_url)),
+      )
+      sessionStorage.setItem(`req_${orderId}`, JSON.stringify({
+        text,
+        links: links.filter(Boolean),
+        images: imageUrls,
+      }))
+      window.location.href = data.authorization_url
+    } catch {
+      setIsSubmitting(false)
+    }
   }
 
   if (isLoading) {
@@ -517,6 +748,8 @@ export default function GigDetail() {
                 isSaved={isSaved}
                 onSave={handleSave}
                 isOwn={isOwnGig}
+                isOrdering={isSubmitting}
+                orderError={createOrder.error?.body?.detail}
               />
             </div>
           </div>
@@ -525,12 +758,18 @@ export default function GigDetail() {
 
       {/* Mobile sticky bottom bar */}
       <div className="lg:hidden fixed bottom-0 inset-x-0 bg-bg border-t border-line px-4 py-3 flex gap-3 z-30 shadow-[0_-4px_16px_rgba(0,0,0,0.08)]">
-        <button
-          onClick={handleOrder}
-          className="flex-1 h-11 rounded-input bg-brand text-white font-bold text-fs-body hover:bg-brand-ink transition-colors"
-        >
-          Order — {formatPrice(tier === 'pro' && gig?.price_pro ? gig.price_pro : gig?.price_basic)}
-        </button>
+        {!isOwnGig && (
+          <button
+            onClick={handleOrder}
+            disabled={isSubmitting}
+            className="flex-1 h-11 rounded-input bg-brand text-white font-bold text-fs-body hover:bg-brand-ink transition-colors disabled:opacity-70 flex items-center justify-center gap-2"
+          >
+            {isSubmitting
+              ? <><Loader2 size={14} className="animate-spin" /> Processing…</>
+              : `Order — ${formatPrice(tier === 'pro' && gig?.price_pro ? gig.price_pro : gig?.price_basic)}`
+            }
+          </button>
+        )}
         {!isOwnGig && (
           <button
             onClick={handleContact}
@@ -557,6 +796,17 @@ export default function GigDetail() {
           gigId={gig.id}
           contextTitle={gig.title}
           onClose={() => setShowContact(false)}
+        />
+      )}
+
+      {showRequirements && (
+        <RequirementsModal
+          gig={gig}
+          tier={tier}
+          onClose={() => { setShowRequirements(false); createOrder.reset?.() }}
+          onSubmit={handleRequirementsSubmit}
+          isSubmitting={isSubmitting}
+          orderError={createOrder.error?.body?.detail}
         />
       )}
     </div>

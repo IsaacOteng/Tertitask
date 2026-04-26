@@ -12,6 +12,8 @@ DEBUG = config('DEBUG', default=True, cast=bool)
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1', cast=Csv())
 
 INSTALLED_APPS = [
+    'daphne',
+    'unfold',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -21,6 +23,7 @@ INSTALLED_APPS = [
     # Third-party
     'rest_framework',
     'corsheaders',
+    'channels',
     # Local
     'accounts',
     'catalog',
@@ -31,6 +34,7 @@ INSTALLED_APPS = [
     'common',
     'jobs',
     'conversations',
+    'notifications',
 ]
 
 MIDDLEWARE = [
@@ -63,6 +67,23 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'tertitask.wsgi.application'
+ASGI_APPLICATION = 'tertitask.asgi.application'
+
+# Django Channels — use Redis if REDIS_URL is set, otherwise in-memory (dev only)
+REDIS_URL = config('REDIS_URL', default='')
+if REDIS_URL:
+    CHANNEL_LAYERS = {
+        'default': {
+            'BACKEND': 'channels_redis.core.RedisChannelLayer',
+            'CONFIG': {'hosts': [REDIS_URL]},
+        }
+    }
+else:
+    CHANNEL_LAYERS = {
+        'default': {
+            'BACKEND': 'channels.layers.InMemoryChannelLayer',
+        }
+    }
 
 DATABASES = {
     'default': dj_database_url.config(

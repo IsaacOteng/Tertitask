@@ -1,6 +1,6 @@
 import { useParams, Navigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { useOrder } from '../hooks/useOrder'
+import { useOrder } from '../hooks/useOrders'
 import DeliveryForm from '../components/DeliveryForm'
 
 export default function DeliverPage() {
@@ -12,8 +12,8 @@ export default function DeliverPage() {
   if (error || !order) return <div className="max-w-2xl mx-auto px-4 py-12 text-sm text-danger">Order not found.</div>
 
   // Only the freelancer may access this page
-  if (me?.id !== order.freelancer) return <Navigate to={`/orders/${id}`} replace />
-  if (order.status !== 'funded') return <Navigate to={`/sales/${id}`} replace />
+  if (me?.id !== order.freelancer?.id) return <Navigate to={`/orders/${id}`} replace />
+  if (order.status !== 'funded') return <Navigate to={`/orders/${id}`} replace />
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-8">
