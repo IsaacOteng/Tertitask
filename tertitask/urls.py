@@ -4,7 +4,18 @@ from django.http import JsonResponse
 
 
 def health(request):
-    return JsonResponse({"status": "ok", "service": "tertitask-api"})
+    from django.db import connection
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute('SELECT 1')
+        db_status = 'ok'
+    except Exception:
+        db_status = 'error'
+    http_status = 200 if db_status == 'ok' else 503
+    return JsonResponse(
+        {'status': 'ok' if db_status == 'ok' else 'error', 'db': db_status, 'service': 'tertitask-api'},
+        status=http_status,
+    )
 
 
 urlpatterns = [

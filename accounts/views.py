@@ -35,10 +35,20 @@ class DeleteAccountView(APIView):
     permission_classes = [IsAuthenticated]
 
     def delete(self, request):
+        from orders.models import Order
         user = request.user
         firebase_uid = user.firebase_uid
 
-        # Delete from Firebase first so the email is freed immediately.
+        # Orders carry PROTECT foreign keys — if any exist, user.delete() would raise
+        # ProtectedError after Firebase already deleted the account, leaving an orphaned
+        # record that can never log in. Check first so we never touch Firebase on failure.
+        if Order.objects.filter(client=user).exists() or Order.objects.filter(freelancer=user).exists():
+            return Response(
+                {'detail': 'Account has order history and cannot be self-deleted. Contact support for assistance.'},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        # Delete from Firebase first so the email is freed immediately for new signups.
         try:
             from firebase_admin import auth as fb_auth
             fb_auth.delete_user(firebase_uid)

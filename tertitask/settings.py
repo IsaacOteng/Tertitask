@@ -145,12 +145,19 @@ CORS_ALLOWED_ORIGINS = config(
 )
 CORS_ALLOW_CREDENTIALS = True
 
+# CSRF trusted origins — must match the frontend domain so cross-origin POST requests
+# (login, form submissions) pass Django's CSRF middleware when SESSION_COOKIE_SECURE=True.
+CSRF_TRUSTED_ORIGINS = config(
+    'CSRF_TRUSTED_ORIGINS',
+    default='http://localhost:5173',
+    cast=Csv(),
+)
+
 # Firebase
 FIREBASE_CREDENTIALS_JSON = config('FIREBASE_CREDENTIALS_JSON', default='')
 
-# Paystack
+# Paystack — webhooks are also verified using PAYSTACK_SECRET_KEY (same key, no separate secret)
 PAYSTACK_SECRET_KEY = config('PAYSTACK_SECRET_KEY', default='')
-PAYSTACK_WEBHOOK_SECRET = config('PAYSTACK_WEBHOOK_SECRET', default='')
 
 # Cloudflare R2
 R2_ACCOUNT_ID = config('R2_ACCOUNT_ID', default='')

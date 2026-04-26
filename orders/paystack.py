@@ -131,7 +131,8 @@ def initiate_transfer(amount, recipient_code, reference, reason=''):
 
 
 def verify_webhook_signature(raw_body: bytes, signature: str) -> bool:
-    """Return True if signature matches HMAC-SHA512 of raw_body with PAYSTACK_WEBHOOK_SECRET."""
-    secret = settings.PAYSTACK_WEBHOOK_SECRET.encode()
+    """Return True if the X-Paystack-Signature header matches HMAC-SHA512 of the raw body.
+    Paystack signs with your secret key — the same key used for API calls."""
+    secret = settings.PAYSTACK_SECRET_KEY.encode()
     computed = hmac.new(secret, raw_body, hashlib.sha512).hexdigest()
     return hmac.compare_digest(computed, signature)

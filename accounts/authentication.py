@@ -14,16 +14,28 @@ def _init_firebase():
         return
     creds_json = settings.FIREBASE_CREDENTIALS_JSON
     if not creds_json:
-        print('[TertiTask] WARNING: FIREBASE_CREDENTIALS_JSON is not set — all auth will be rejected')
+        # In production this is a hard failure — every authenticated endpoint is broken without it.
+        if not settings.DEBUG:
+            from django.core.exceptions import ImproperlyConfigured
+            raise ImproperlyConfigured(
+                'FIREBASE_CREDENTIALS_JSON must be set in production. '
+                'Set it as an environment variable on Render.'
+            )
+        logger.warning('FIREBASE_CREDENTIALS_JSON is not set — all authenticated requests will be rejected')
         return
     try:
         creds_dict = json.loads(creds_json)
         cred = credentials.Certificate(creds_dict)
         firebase_admin.initialize_app(cred)
-        print(f'[TertiTask] Firebase Admin SDK ready (project: {creds_dict.get("project_id")})')
+        logger.info('Firebase Admin SDK ready (project: %s)', creds_dict.get('project_id'))
     except Exception as exc:
-        print(f'[TertiTask] ERROR: Firebase Admin SDK failed to initialise: {exc}')
         logger.error('Firebase Admin SDK failed to initialise: %s', exc)
+        if not settings.DEBUG:
+            from django.core.exceptions import ImproperlyConfigured
+            raise ImproperlyConfigured(
+                f'Firebase Admin SDK failed to initialise: {exc}. '
+                'Check that FIREBASE_CREDENTIALS_JSON contains valid JSON.'
+            ) from exc
 
 
 class FirebaseAuthentication(authentication.BaseAuthentication):

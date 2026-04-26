@@ -81,6 +81,9 @@ class Order(models.Model):
     released_at = models.DateTimeField(null=True, blank=True)
     auto_approve_at = models.DateTimeField(null=True, blank=True)
     cancelled_at = models.DateTimeField(null=True, blank=True)
+    # Set atomically before calling Paystack refund; prevents duplicate refund calls
+    # on concurrent requests (reject/cancel) or on webhook + manual action races.
+    refunded_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

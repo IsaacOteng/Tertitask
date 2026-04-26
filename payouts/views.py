@@ -48,6 +48,8 @@ class BankAccountView(APIView):
         if account_type not in ('ghipss', 'mobile_money'):
             account_type = 'ghipss'
 
+        account_name = request.data.get('account_name', '').strip()
+
         if not bank_code or not account_number:
             raise ValidationError({'detail': 'bank_code and account_number are required.'})
 
@@ -56,11 +58,20 @@ class BankAccountView(APIView):
             acct = BankAccount.objects.get(user=request.user, bank_code=bank_code, account_number=account_number)
             return Response(BankAccountSerializer(acct).data, status=status.HTTP_200_OK)
 
-        try:
-            resolved = ps.resolve_account(account_number, bank_code)
-            account_name = resolved.get('account_name', '')
-        except ps.PaystackError as exc:
-            return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        if account_type == 'mobile_money':
+            # Paystack's /bank/resolve endpoint only supports bank accounts, not mobile money.
+            # For MoMo we rely on the name the user provides and Paystack's transfer recipient creation.
+            if not account_name:
+                return Response(
+                    {'detail': 'account_name is required for mobile money accounts.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+        else:
+            try:
+                resolved = ps.resolve_account(account_number, bank_code)
+                account_name = resolved.get('account_name', account_name)
+            except ps.PaystackError as exc:
+                return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
             recipient = ps.create_transfer_recipient(
@@ -72,12 +83,16 @@ class BankAccountView(APIView):
         except ps.PaystackError as exc:
             return Response({'detail': str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
 
+        # Paystack may return a verified name in recipient details — prefer that
+        recipient_details = recipient.get('details', {})
+        resolved_name = recipient_details.get('account_name') or account_name
+
         acct = BankAccount.objects.create(
             user=request.user,
             bank_name=bank_name or bank_code,
             bank_code=bank_code,
             account_number=account_number,
-            account_name=account_name,
+            account_name=resolved_name,
             account_type=account_type,
             recipient_code=recipient.get('recipient_code', ''),
         )

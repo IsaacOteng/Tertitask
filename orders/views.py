@@ -29,6 +29,21 @@ logger = logging.getLogger(__name__)
 
 # ── helpers ───────────────────────────────────────────────────────────────────
 
+def _claim_refund(order):
+    """Atomically mark an order as having a refund initiated.
+
+    Uses a conditional UPDATE so only the first concurrent caller wins.
+    Returns True if this call claimed the refund right; False if another
+    request already claimed it (duplicate call — do not call Paystack again).
+    On PaystackError the caller should clear refunded_at so the next request
+    can retry.
+    """
+    updated = Order.objects.filter(pk=order.pk, refunded_at__isnull=True).update(
+        refunded_at=timezone.now()
+    )
+    return updated > 0
+
+
 def _get_order_or_404(pk):
     try:
         return Order.objects.select_related(
@@ -90,7 +105,10 @@ class OrderCreateView(APIView):
             return Response({'detail': 'This gig does not offer a pro tier.'}, status=status.HTTP_400_BAD_REQUEST)
 
         amount = gig.price_basic if tier == 'basic' else gig.price_pro
-        platform_fee = round(amount * settings.PLATFORM_FEE_PERCENT / 100)
+        # Integer division avoids floating-point rounding errors on pesewa amounts.
+        # Truncating (floor) means the platform never over-charges; freelancer always
+        # receives at least (1 - fee_percent/100) of the amount.
+        platform_fee = amount * settings.PLATFORM_FEE_PERCENT // 100
         freelancer_amount = amount - platform_fee
         paystack_reference = uuid.uuid4().hex
 
@@ -218,7 +236,7 @@ class AcceptOfferView(APIView):
             return Response({'detail': 'Offer not found or already actioned.'}, status=status.HTTP_404_NOT_FOUND)
 
         amount = offer.price
-        platform_fee = round(amount * settings.PLATFORM_FEE_PERCENT / 100)
+        platform_fee = amount * settings.PLATFORM_FEE_PERCENT // 100
         freelancer_amount = amount - platform_fee
         paystack_reference = uuid.uuid4().hex
 
@@ -446,9 +464,16 @@ class RejectView(APIView):
                 {'detail': f'Order must be delivered to reject (current: {order.status}).'},
                 status=status.HTTP_409_CONFLICT,
             )
+        if not _claim_refund(order):
+            return Response(
+                {'detail': 'A refund is already in progress for this order.'},
+                status=status.HTTP_409_CONFLICT,
+            )
         try:
             ps.refund(order.paystack_reference)
         except ps.PaystackError as exc:
+            # Release the claim so the client can retry after Paystack recovers.
+            Order.objects.filter(pk=order.pk).update(refunded_at=None)
             return Response({'detail': str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
         with transaction.atomic():
             order = transition(order, 'rejected')
@@ -549,9 +574,15 @@ class DisputeResolveView(APIView):
                 data={'order_id': str(order.id)})
 
         else:  # refund
+            if not _claim_refund(order):
+                return Response(
+                    {'detail': 'A refund is already in progress for this order.'},
+                    status=status.HTTP_409_CONFLICT,
+                )
             try:
                 ps.refund(order.paystack_reference)
             except ps.PaystackError as exc:
+                Order.objects.filter(pk=order.pk).update(refunded_at=None)
                 return Response({'detail': str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
             with transaction.atomic():
                 order = transition(order, 'cancelled')
@@ -621,9 +652,15 @@ class CancelView(APIView):
                     {'detail': 'Order cannot be cancelled until the delivery deadline has passed.'},
                     status=status.HTTP_409_CONFLICT,
                 )
+        if not _claim_refund(order):
+            return Response(
+                {'detail': 'A refund is already in progress for this order.'},
+                status=status.HTTP_409_CONFLICT,
+            )
         try:
             ps.refund(order.paystack_reference)
         except ps.PaystackError as exc:
+            Order.objects.filter(pk=order.pk).update(refunded_at=None)
             return Response({'detail': str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
         with transaction.atomic():
             order = transition(order, 'cancelled')
@@ -642,9 +679,15 @@ class FreelancerCancelView(APIView):
                 {'detail': f'Order cannot be cancelled at this stage (current: {order.status}).'},
                 status=status.HTTP_409_CONFLICT,
             )
+        if not _claim_refund(order):
+            return Response(
+                {'detail': 'A refund is already in progress for this order.'},
+                status=status.HTTP_409_CONFLICT,
+            )
         try:
             ps.refund(order.paystack_reference)
         except ps.PaystackError as exc:
+            Order.objects.filter(pk=order.pk).update(refunded_at=None)
             return Response({'detail': str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
         with transaction.atomic():
             order = transition(order, 'cancelled')

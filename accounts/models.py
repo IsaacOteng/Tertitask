@@ -13,8 +13,14 @@ class UserManager(BaseUserManager):
         user.save(using=self._db)
         return user
 
-    def create_superuser(self, firebase_uid, email, **extra_fields):
-        return self.create_user(firebase_uid, email, **extra_fields)
+    def create_superuser(self, firebase_uid, email, password=None, **extra_fields):
+        extra_fields.setdefault('is_staff', True)
+        extra_fields.setdefault('is_superuser', True)
+        email = self.normalize_email(email)
+        user = self.model(firebase_uid=firebase_uid, email=email, **extra_fields)
+        user.set_password(password)
+        user.save(using=self._db)
+        return user
 
 
 class User(AbstractBaseUser):
@@ -45,6 +51,8 @@ class User(AbstractBaseUser):
         blank=True,
         default='',
     )
+    is_staff = models.BooleanField(default=False)
+    is_superuser = models.BooleanField(default=False)
     onboarding_complete = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -55,6 +63,12 @@ class User(AbstractBaseUser):
 
     class Meta:
         db_table = 'users'
+
+    def has_perm(self, perm, obj=None):
+        return self.is_superuser
+
+    def has_module_perms(self, app_label):
+        return self.is_superuser
 
     def __str__(self):
         return self.email

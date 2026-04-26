@@ -2,8 +2,11 @@ services:
   - type: web
     name: tertitask-api
     env: python
-    buildCommand: pip install -r requirements.txt && python manage.py migrate
-    startCommand: gunicorn tertitask.wsgi
+    # collectstatic must run before Daphne starts so Django admin has CSS.
+    # Daphne (ASGI) is required — gunicorn (WSGI) does not support WebSockets
+    # needed by Django Channels / notifications.
+    buildCommand: pip install -r requirements.txt && python manage.py migrate && python manage.py collectstatic --noinput
+    startCommand: daphne -b 0.0.0.0 -p $PORT tertitask.asgi:application
     envVars:
       - key: SECRET_KEY
         generateValue: true
@@ -15,11 +18,11 @@ services:
         value: tertitask-api.onrender.com
       - key: CORS_ALLOWED_ORIGINS
         value: https://tertitask.vercel.app
+      - key: CSRF_TRUSTED_ORIGINS
+        value: https://tertitask.vercel.app
       - key: FIREBASE_CREDENTIALS_JSON
         sync: false
       - key: PAYSTACK_SECRET_KEY
-        sync: false
-      - key: PAYSTACK_WEBHOOK_SECRET
         sync: false
       - key: R2_ACCOUNT_ID
         sync: false
@@ -33,6 +36,10 @@ services:
         value: tertitask-deliveries
       - key: R2_PUBLIC_BASE_URL
         sync: false
+      - key: R2_DELIVERIES_BASE_URL
+        sync: false
+      - key: SENTRY_DSN
+        sync: false
       - key: PLATFORM_FEE_PERCENT
         value: "10"
       - key: CLEARING_DAYS
@@ -41,6 +48,8 @@ services:
         value: "3"
       - key: MIN_WITHDRAWAL_AMOUNT
         value: "5000"
+      - key: FRONTEND_URL
+        value: https://tertitask.vercel.app
       - key: DEBUG
         value: "False"
 
