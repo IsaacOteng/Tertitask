@@ -15,9 +15,9 @@ export function usePayouts() {
   })
 }
 
-export function useBankAccount() {
+export function useBankAccounts() {
   return useQuery({
-    queryKey: ['bank-account'],
+    queryKey: ['bank-accounts'],
     queryFn: () => api.get('/bank-accounts/me/'),
   })
 }
@@ -34,7 +34,7 @@ export function useSaveBankAccount() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (body) => api.post('/bank-accounts/me/', body),
-    onSuccess: (data) => qc.setQueryData(['bank-account'], data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['bank-accounts'] }),
   })
 }
 

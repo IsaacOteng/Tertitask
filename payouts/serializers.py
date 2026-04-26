@@ -6,7 +6,7 @@ from payouts.models import BankAccount, LedgerEntry, Payout
 class BankAccountSerializer(serializers.ModelSerializer):
     class Meta:
         model = BankAccount
-        fields = ['id', 'bank_name', 'bank_code', 'account_number', 'account_name', 'recipient_code', 'created_at', 'updated_at']
+        fields = ['id', 'bank_name', 'bank_code', 'account_number', 'account_name', 'account_type', 'recipient_code', 'created_at', 'updated_at']
         read_only_fields = fields
 
 

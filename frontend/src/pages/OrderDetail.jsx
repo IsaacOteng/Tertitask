@@ -3,7 +3,7 @@ import { useParams, Link } from 'react-router-dom'
 import { createPortal } from 'react-dom'
 import { CheckCircle2, XCircle, AlertTriangle, Clock, ExternalLink, ChevronRight, Loader2 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
-import { useOrder, useApproveOrder, useRejectOrder, useDisputeOrder } from '../hooks/useOrders'
+import { useOrder, useApproveOrder, useRejectOrder, useDisputeOrder, useFreelancerCancelOrder } from '../hooks/useOrders'
 import OrderStatusBadge from '../components/OrderStatusBadge'
 import DeliveryView from '../components/DeliveryView'
 import { useDocumentTitle } from '../hooks/useDocumentTitle'
@@ -87,6 +87,30 @@ function DisputeModal({ onConfirm, onCancel, busy }) {
   )
 }
 
+function FreelancerCancelModal({ onConfirm, onCancel, busy }) {
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 backdrop-blur-sm px-4">
+      <div className="w-full max-w-sm bg-bg rounded-card border border-line shadow-elevated p-6">
+        <h3 className="font-semibold text-fs-body text-ink mb-1">Cancel this order?</h3>
+        <p className="text-fs-small text-ink-muted leading-relaxed mb-5">
+          This will immediately refund the client in full and cannot be undone.
+          Only cancel if you genuinely cannot complete the work.
+        </p>
+        <div className="flex justify-end gap-3">
+          <button onClick={onCancel} disabled={busy} className="h-9 px-4 rounded-input border border-line text-fs-small font-medium text-ink-soft hover:text-ink disabled:opacity-50">
+            Keep order
+          </button>
+          <button onClick={onConfirm} disabled={busy} className="flex items-center gap-2 h-9 px-5 rounded-input bg-danger text-white text-fs-small font-semibold hover:bg-red-700 disabled:opacity-60">
+            {busy && <Loader2 size={13} className="animate-spin" />}
+            Yes, cancel & refund client
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  )
+}
+
 export default function OrderDetail() {
   useDocumentTitle('Order')
   const { id } = useParams()
@@ -95,8 +119,10 @@ export default function OrderDetail() {
   const approveMut = useApproveOrder(id)
   const rejectMut = useRejectOrder(id)
   const disputeMut = useDisputeOrder(id)
+  const freelancerCancelMut = useFreelancerCancelOrder(id)
   const [showReject, setShowReject] = useState(false)
   const [showDispute, setShowDispute] = useState(false)
+  const [showFreelancerCancel, setShowFreelancerCancel] = useState(false)
 
   if (isLoading) {
     return (
@@ -263,15 +289,23 @@ export default function OrderDetail() {
           </div>
         )}
 
-        {/* Freelancer: submit delivery */}
+        {/* Freelancer: submit delivery or cancel */}
         {isFreelancer && order.status === 'funded' && (
-          <Link
-            to={`/sales/${order.id}/deliver`}
-            className="flex items-center justify-center gap-2 w-full h-11 rounded-input bg-brand text-white text-fs-small font-semibold hover:bg-brand-ink transition-colors"
-          >
-            Submit Delivery
-            <ChevronRight size={15} />
-          </Link>
+          <div className="space-y-2">
+            <Link
+              to={`/sales/${order.id}/deliver`}
+              className="flex items-center justify-center gap-2 w-full h-11 rounded-input bg-brand text-white text-fs-small font-semibold hover:bg-brand-ink transition-colors"
+            >
+              Submit Delivery
+              <ChevronRight size={15} />
+            </Link>
+            <button
+              onClick={() => setShowFreelancerCancel(true)}
+              className="w-full h-9 rounded-input border border-line text-fs-small text-ink-muted hover:text-danger hover:border-danger transition-colors"
+            >
+              I can't do this job — cancel & refund client
+            </button>
+          </div>
         )}
 
         {/* Dispute info */}
@@ -301,6 +335,17 @@ export default function OrderDetail() {
           onConfirm={async (reason) => {
             await disputeMut.mutateAsync({ reason })
             setShowDispute(false)
+          }}
+        />
+      )}
+
+      {showFreelancerCancel && (
+        <FreelancerCancelModal
+          busy={freelancerCancelMut.isPending}
+          onCancel={() => setShowFreelancerCancel(false)}
+          onConfirm={async () => {
+            await freelancerCancelMut.mutateAsync()
+            setShowFreelancerCancel(false)
           }}
         />
       )}

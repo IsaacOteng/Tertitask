@@ -37,45 +37,49 @@ class BankAccountView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        try:
-            acct = BankAccount.objects.get(user=request.user)
-        except BankAccount.DoesNotExist:
-            return Response(None)
-        return Response(BankAccountSerializer(acct).data)
+        accounts = BankAccount.objects.filter(user=request.user).order_by('-created_at')
+        return Response(BankAccountSerializer(accounts, many=True).data)
 
     def post(self, request):
         bank_code = request.data.get('bank_code', '').strip()
         account_number = request.data.get('account_number', '').strip()
         bank_name = request.data.get('bank_name', '').strip()
+        account_type = request.data.get('account_type', 'ghipss').strip()
+        if account_type not in ('ghipss', 'mobile_money'):
+            account_type = 'ghipss'
 
         if not bank_code or not account_number:
             raise ValidationError({'detail': 'bank_code and account_number are required.'})
 
+        # Prevent adding the exact same account twice
+        if BankAccount.objects.filter(user=request.user, bank_code=bank_code, account_number=account_number).exists():
+            acct = BankAccount.objects.get(user=request.user, bank_code=bank_code, account_number=account_number)
+            return Response(BankAccountSerializer(acct).data, status=status.HTTP_200_OK)
+
         try:
             resolved = ps.resolve_account(account_number, bank_code)
+            account_name = resolved.get('account_name', '')
         except ps.PaystackError as exc:
             return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
-
-        account_name = resolved.get('account_name', '')
 
         try:
             recipient = ps.create_transfer_recipient(
                 name=account_name,
                 account_number=account_number,
                 bank_code=bank_code,
+                account_type=account_type,
             )
         except ps.PaystackError as exc:
             return Response({'detail': str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
 
-        acct, _ = BankAccount.objects.update_or_create(
+        acct = BankAccount.objects.create(
             user=request.user,
-            defaults={
-                'bank_name': bank_name or bank_code,
-                'bank_code': bank_code,
-                'account_number': account_number,
-                'account_name': account_name,
-                'recipient_code': recipient.get('recipient_code', ''),
-            },
+            bank_name=bank_name or bank_code,
+            bank_code=bank_code,
+            account_number=account_number,
+            account_name=account_name,
+            account_type=account_type,
+            recipient_code=recipient.get('recipient_code', ''),
         )
         return Response(BankAccountSerializer(acct).data, status=status.HTTP_201_CREATED)
 
@@ -90,13 +94,19 @@ class PayoutCreateView(APIView):
         except (TypeError, ValueError):
             raise ValidationError({'detail': 'amount must be an integer (pesewas).'})
 
-        try:
-            bank_acct = BankAccount.objects.get(user=request.user)
-        except BankAccount.DoesNotExist:
-            return Response(
-                {'detail': 'No bank account on file. Add one at /earnings/bank.'},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        bank_account_id = request.data.get('bank_account_id')
+        if bank_account_id:
+            try:
+                bank_acct = BankAccount.objects.get(id=bank_account_id, user=request.user)
+            except BankAccount.DoesNotExist:
+                return Response({'detail': 'Bank account not found.'}, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            bank_acct = BankAccount.objects.filter(user=request.user).order_by('-created_at').first()
+            if not bank_acct:
+                return Response(
+                    {'detail': 'No bank account on file. Add one at /earnings/bank.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
         if amount < settings.MIN_WITHDRAWAL_AMOUNT:
             return Response(

@@ -73,6 +73,17 @@ export function useDisputeOrder(id) {
   })
 }
 
+export function useFreelancerCancelOrder(id) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: () => api.post(`/orders/${id}/freelancer-cancel/`, {}),
+    onSuccess: (data) => {
+      qc.setQueryData(['order', id], data)
+      qc.invalidateQueries({ queryKey: ['sales'] })
+    },
+  })
+}
+
 // ── Offers ────────────────────────────────────────────────────────────────────
 
 export function useJobOffers(jobId) {

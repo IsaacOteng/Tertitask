@@ -7,23 +7,22 @@ import { useUnreadNotificationCount, useNotifications, useMarkNotificationsRead,
 import { LayoutDashboard, Bookmark, ShoppingBag, BarChart2, LogOut, User, Package, PlusCircle, Pencil, MessageCircle, Trash2, Bell } from 'lucide-react'
 
 const FREELANCER_NAV = [
-  { label: 'My profile',   to: '/me',        icon: User },
-  { label: 'Edit profile', to: '/me/edit',   icon: Pencil },
-  { label: 'My gigs',      to: '/me/gigs',   icon: LayoutDashboard },
-  { label: 'Messages',     to: '/messages',  icon: MessageCircle },
-  { label: 'Saved',        to: '/me/saved',  icon: Bookmark },
-  { label: 'Orders',       to: '/orders',    icon: ShoppingBag },
-  { label: 'Sales',        to: '/sales',     icon: Package },
-  { label: 'Earnings',     to: '/earnings',  icon: BarChart2 },
+  { label: 'My profile',   to: '/me',                  icon: User },
+  { label: 'Edit profile', to: '/me/edit',             icon: Pencil },
+  { label: 'My gigs',      to: '/me/gigs',             icon: LayoutDashboard },
+  { label: 'Messages',     to: '/messages',            icon: MessageCircle },
+  { label: 'Saved',        to: '/me/saved',            icon: Bookmark },
+  { label: 'My Sales',     to: '/orders?tab=sales',    icon: Package },
+  { label: 'My Orders',    to: '/orders?tab=orders',   icon: ShoppingBag },
+  { label: 'Earnings',     to: '/earnings',            icon: BarChart2 },
 ]
 
 const CLIENT_NAV = [
   { label: 'My profile',   to: '/me',        icon: User },
   { label: 'Edit profile', to: '/me/edit',   icon: Pencil },
-  { label: 'My tasks',     to: '/me',        icon: LayoutDashboard },
   { label: 'Messages',     to: '/messages',  icon: MessageCircle },
   { label: 'Browse gigs',  to: '/browse',    icon: Bookmark },
-  { label: 'Orders',       to: '/orders',    icon: ShoppingBag },
+  { label: 'My Orders',    to: '/orders',    icon: ShoppingBag },
 ]
 
 function UnreadBadge() {

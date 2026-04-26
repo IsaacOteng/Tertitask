@@ -66,12 +66,27 @@ def refund(transaction_id, amount=None):
 
 
 def get_banks(country='ghana'):
-    resp = requests.get(
-        f'https://api.paystack.co/bank?country={country}',
-        headers=_headers(),
-        timeout=30,
-    )
-    return _extract(resp)
+    """Return banks + mobile money providers for the given country.
+    Mobile money entries come first since that's the most common payout method in Ghana.
+    Each entry includes a `type` field: 'mobile_money' or 'ghipss'.
+    """
+    def _fetch(type_param):
+        resp = requests.get(
+            f'https://api.paystack.co/bank?country={country}&type={type_param}&perPage=100',
+            headers=_headers(),
+            timeout=30,
+        )
+        try:
+            items = _extract(resp)
+        except PaystackError:
+            items = []
+        for item in items:
+            item['type'] = type_param
+        return items
+
+    momo = _fetch('mobile_money')
+    banks = _fetch('ghipss')
+    return momo + banks
 
 
 def resolve_account(account_number, bank_code):
@@ -83,11 +98,11 @@ def resolve_account(account_number, bank_code):
     return _extract(resp)
 
 
-def create_transfer_recipient(name, account_number, bank_code, currency='GHS'):
+def create_transfer_recipient(name, account_number, bank_code, account_type='ghipss', currency='GHS'):
     resp = requests.post(
         'https://api.paystack.co/transferrecipient',
         json={
-            'type': 'ghipss',
+            'type': account_type,   # 'ghipss' for bank accounts, 'mobile_money' for MoMo
             'name': name,
             'account_number': account_number,
             'bank_code': bank_code,

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { TrendingUp, Clock, Wallet, ChevronDown, ChevronUp, ArrowDownToLine } from 'lucide-react'
-import { useEarnings, usePayouts, useBankAccount, useWithdraw } from '../hooks/useEarnings'
+import { useEarnings, usePayouts, useBankAccounts, useWithdraw } from '../hooks/useEarnings'
 import { useDocumentTitle } from '../hooks/useDocumentTitle'
 
 const MIN_WITHDRAWAL = 5000 // pesewas = GHS 50
@@ -56,12 +56,13 @@ export default function Earnings() {
   useDocumentTitle('Earnings')
   const { data: earnings, isLoading } = useEarnings()
   const { data: payouts } = usePayouts()
-  const { data: bankAccount } = useBankAccount()
+  const { data: bankAccounts = [] } = useBankAccounts()
   const withdrawMut = useWithdraw()
   const navigate = useNavigate()
 
   const [showWithdrawModal, setShowWithdrawModal] = useState(false)
   const [withdrawAmount, setWithdrawAmount] = useState('')
+  const [selectedAccountId, setSelectedAccountId] = useState(null)
   const [withdrawError, setWithdrawError] = useState(null)
   const [showPayouts, setShowPayouts] = useState(false)
 
@@ -69,8 +70,9 @@ export default function Earnings() {
   const canWithdraw = available >= MIN_WITHDRAWAL
 
   const handleWithdrawOpen = () => {
-    if (!bankAccount) { navigate('/earnings/bank'); return }
+    if (!bankAccounts.length) { navigate('/earnings/bank'); return }
     setWithdrawAmount(String(Math.floor(available / 100) * 100))
+    setSelectedAccountId(bankAccounts[0].id)
     setWithdrawError(null)
     setShowWithdrawModal(true)
   }
@@ -79,8 +81,9 @@ export default function Earnings() {
     const amt = parseInt(withdrawAmount, 10)
     if (!amt || amt < MIN_WITHDRAWAL) { setWithdrawError(`Minimum withdrawal is ${ghsCedi(MIN_WITHDRAWAL)}`); return }
     if (amt > available) { setWithdrawError('Amount exceeds available balance.'); return }
+    if (!selectedAccountId) { setWithdrawError('Select an account to withdraw to.'); return }
     try {
-      await withdrawMut.mutateAsync({ amount: amt })
+      await withdrawMut.mutateAsync({ amount: amt, bank_account_id: selectedAccountId })
       setShowWithdrawModal(false)
     } catch (err) {
       setWithdrawError(err.body?.detail || 'Payout failed. Try again.')
@@ -123,9 +126,11 @@ export default function Earnings() {
             <div>
               <p className="text-fs-body font-semibold text-ink mb-0.5">Withdraw funds</p>
               <p className="text-fs-small text-ink-muted">
-                {bankAccount
-                  ? `To ${bankAccount.bank_name} ****${bankAccount.account_number.slice(-4)}`
-                  : 'No bank account linked yet.'}
+                {bankAccounts.length === 0
+                  ? 'No bank account linked yet.'
+                  : bankAccounts.length === 1
+                  ? `To ${bankAccounts[0].bank_name} ****${bankAccounts[0].account_number.slice(-4)}`
+                  : `${bankAccounts.length} accounts saved — select on withdrawal`}
               </p>
               {!canWithdraw && (
                 <p className="text-fs-tiny text-ink-muted mt-1">
@@ -142,11 +147,9 @@ export default function Earnings() {
                 <ArrowDownToLine size={15} />
                 Withdraw
               </button>
-              {!bankAccount && (
-                <Link to="/earnings/bank" className="text-fs-tiny text-brand hover:underline text-right">
-                  Add bank account →
-                </Link>
-              )}
+              <Link to="/earnings/bank" className="text-fs-tiny text-brand hover:underline text-right">
+                {bankAccounts.length === 0 ? 'Add bank account →' : 'Add another account →'}
+              </Link>
             </div>
           </div>
         </div>
@@ -254,16 +257,47 @@ export default function Earnings() {
       </div>
 
       {/* Withdraw modal */}
-      {showWithdrawModal && bankAccount && (
+      {showWithdrawModal && bankAccounts.length > 0 && (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-bg rounded-card border border-line max-w-sm w-full p-6 shadow-card space-y-5">
             <div>
               <h3 className="text-fs-h3 font-display font-semibold text-ink">Withdraw funds</h3>
-              <p className="text-fs-small text-ink-muted mt-1">
-                To <span className="font-medium text-ink">{bankAccount.bank_name}</span>{' '}
-                ****{bankAccount.account_number.slice(-4)}
-              </p>
+              <p className="text-fs-small text-ink-muted mt-1">Funds go to your selected account.</p>
             </div>
+
+            {bankAccounts.length > 1 ? (
+              <div>
+                <label className="block text-fs-small font-medium text-ink-muted mb-1.5">Send to</label>
+                <div className="space-y-2">
+                  {bankAccounts.map((acct) => (
+                    <label
+                      key={acct.id}
+                      className={`flex items-center gap-3 p-3 rounded-input border cursor-pointer transition-colors ${
+                        selectedAccountId === acct.id ? 'border-brand bg-brand/5' : 'border-line hover:border-ink-soft'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="withdraw-account"
+                        value={acct.id}
+                        checked={selectedAccountId === acct.id}
+                        onChange={() => setSelectedAccountId(acct.id)}
+                        className="accent-brand"
+                      />
+                      <div>
+                        <p className="text-fs-small font-medium text-ink">{acct.bank_name}</p>
+                        <p className="text-fs-tiny text-ink-muted">****{acct.account_number.slice(-4)} · {acct.account_name}</p>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <p className="text-fs-small text-ink-muted -mt-2">
+                To <span className="font-medium text-ink">{bankAccounts[0].bank_name}</span>{' '}
+                ****{bankAccounts[0].account_number.slice(-4)}
+              </p>
+            )}
 
             <div>
               <label className="block text-fs-small font-medium text-ink-muted mb-1.5">Amount (GHS)</label>

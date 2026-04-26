@@ -5,16 +5,21 @@ from django.db import models
 
 
 class BankAccount(models.Model):
-    """One bank account per user (upsert on save) — section 10.7."""
-    user = models.OneToOneField(
+    """Saved payout accounts for a user — multiple allowed."""
+    user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.PROTECT,
-        related_name='bank_account',
+        related_name='bank_accounts',
     )
+    ACCOUNT_TYPE_CHOICES = [
+        ('ghipss', 'Bank Account'),
+        ('mobile_money', 'Mobile Money'),
+    ]
     bank_name = models.CharField(max_length=120)
     bank_code = models.CharField(max_length=20)
     account_number = models.CharField(max_length=20)
     account_name = models.CharField(max_length=120)
+    account_type = models.CharField(max_length=20, choices=ACCOUNT_TYPE_CHOICES, default='ghipss')
     recipient_code = models.CharField(max_length=64)  # Paystack recipient code
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

@@ -551,6 +551,31 @@ class CancelView(APIView):
         return Response(OrderSerializer(order).data)
 
 
+class FreelancerCancelView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        order = _get_order_or_404(pk)
+        if order.freelancer != request.user:
+            raise PermissionDenied()
+        if order.status not in ('funded', 'in_progress'):
+            return Response(
+                {'detail': f'Order cannot be cancelled at this stage (current: {order.status}).'},
+                status=status.HTTP_409_CONFLICT,
+            )
+        try:
+            ps.refund(order.paystack_reference)
+        except ps.PaystackError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
+        with transaction.atomic():
+            order = transition(order, 'cancelled')
+        _notify(order.client, 'order_cancelled',
+            'Order cancelled by freelancer',
+            body=f'"{order.title}" was cancelled. A full refund is on its way.',
+            data={'order_id': str(order.id)})
+        return Response(OrderSerializer(order).data)
+
+
 # ── Paystack webhook ──────────────────────────────────────────────────────────
 
 @method_decorator(csrf_exempt, name='dispatch')

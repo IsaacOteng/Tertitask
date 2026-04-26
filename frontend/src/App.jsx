@@ -20,7 +20,6 @@ import Checkout from './pages/Checkout'
 import PaymentReturn from './pages/PaymentReturn'
 import MyOrders from './pages/MyOrders'
 import OrderDetail from './pages/OrderDetail'
-import MySales from './pages/MySales'
 import DeliverPage from './pages/DeliverPage'
 import Earnings from './pages/Earnings'
 import BankDetails from './pages/BankDetails'
@@ -66,7 +65,7 @@ function AppRoutes() {
         <Route path="/orders/:id/return" element={<AuthRoute element={<PaymentReturn />} />} />
         <Route path="/orders" element={<AuthRoute element={<MyOrders />} />} />
         <Route path="/orders/:id" element={<AuthRoute element={<OrderDetail />} />} />
-        <Route path="/sales" element={<AuthRoute element={<MySales />} />} />
+        <Route path="/sales" element={<Navigate to="/orders?tab=sales" replace />} />
         <Route path="/sales/:id/deliver" element={<AuthRoute element={<DeliverPage />} />} />
         <Route path="/earnings" element={<AuthRoute element={<Earnings />} />} />
         <Route path="/earnings/bank" element={<AuthRoute element={<BankDetails />} />} />
