@@ -8,7 +8,13 @@ import { Briefcase, Users } from 'lucide-react'
 const FREELANCER_STEPS = ['About you', 'Contact', 'Skills']
 const CLIENT_STEPS = ['About you', 'Contact']
 
-const YEAR_OPTIONS = [1, 2, 3, 4, 5, 6]
+const YEAR_OPTIONS = [
+  { value: 1, label: 'Level 100' },
+  { value: 2, label: 'Level 200' },
+  { value: 3, label: 'Level 300' },
+  { value: 4, label: 'Level 400' },
+  { value: 5, label: 'Completed' },
+]
 const CONTACT_OPTIONS = [
   { value: 'email', label: 'Email' },
   { value: 'phone', label: 'Phone' },
@@ -157,7 +163,7 @@ function StepAboutFreelancer({ form, setForm }) {
         >
           <option value="">Select year</option>
           {YEAR_OPTIONS.map((y) => (
-            <option key={y} value={y}>Year {y}</option>
+            <option key={y.value} value={y.value}>{y.label}</option>
           ))}
         </Select>
       </div>
@@ -333,13 +339,21 @@ function StepContact({ form, setForm }) {
 // ── Step: Skills (freelancer only) ───────────────────────────────────
 function StepSkills({ form, setForm, skillOptions, categoryOptions }) {
   const selected = form.skills || []
+  const [customInput, setCustomInput] = useState('')
 
   function toggleSkill(skill) {
     if (selected.includes(skill)) {
       setForm({ ...form, skills: selected.filter((s) => s !== skill) })
-    } else if (selected.length < 10) {
+    } else if (selected.length < 15) {
       setForm({ ...form, skills: [...selected, skill] })
     }
+  }
+
+  function addCustomSkill() {
+    const trimmed = customInput.trim()
+    if (!trimmed || selected.includes(trimmed) || selected.length >= 15) return
+    setForm({ ...form, skills: [...selected, trimmed] })
+    setCustomInput('')
   }
 
   return (
@@ -360,11 +374,11 @@ function StepSkills({ form, setForm, skillOptions, categoryOptions }) {
         </Select>
       </div>
       <div>
-        <FieldLabel>Skills (up to 10)</FieldLabel>
+        <FieldLabel>Skills (up to 15)</FieldLabel>
         <div className="flex flex-wrap gap-2 mt-1">
           {skillOptions.map((skill) => {
             const isSelected = selected.includes(skill)
-            const atLimit = selected.length >= 10 && !isSelected
+            const atLimit = selected.length >= 15 && !isSelected
             return (
               <button
                 key={skill}
@@ -384,7 +398,25 @@ function StepSkills({ form, setForm, skillOptions, categoryOptions }) {
             )
           })}
         </div>
-        <p className="mt-2 text-fs-small text-ink-muted">{selected.length}/10 selected</p>
+        <div className="flex gap-2 mt-3">
+          <Input
+            value={customInput}
+            onChange={(e) => setCustomInput(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addCustomSkill() } }}
+            placeholder="Add a skill not listed above…"
+            className="flex-1"
+            disabled={selected.length >= 15}
+          />
+          <button
+            type="button"
+            onClick={addCustomSkill}
+            disabled={!customInput.trim() || selected.length >= 15}
+            className="h-[42px] px-4 rounded-input bg-brand text-white text-fs-small font-semibold hover:bg-brand-ink transition disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+          >
+            Add
+          </button>
+        </div>
+        <p className="mt-2 text-fs-small text-ink-muted">{selected.length}/15 selected</p>
       </div>
     </div>
   )

@@ -14,11 +14,10 @@ function avatarInitial(name) {
   return name ? name.charAt(0).toUpperCase() : '?'
 }
 
-function ordinal(n) {
+const LEVEL_MAP = { 1: 'Level 100', 2: 'Level 200', 3: 'Level 300', 4: 'Level 400', 5: 'Completed' }
+function levelLabel(n) {
   if (!n) return null
-  const s = ['th', 'st', 'nd', 'rd']
-  const v = n % 100
-  return `Year ${n}${s[(v - 20) % 10] || s[v] || s[0]}`
+  return LEVEL_MAP[n] || `Level ${n * 100}`
 }
 
 function formatCategory(slug) {
@@ -113,7 +112,7 @@ export default function FreelancerProfile() {
       <div className="w-full md:max-w-[78%] mx-auto px-4">
 
       {/* ── Banner ──────────────────────────────────────────────── */}
-      <div className="relative h-52 rounded-2xl overflow-hidden shadow-card mb-0">
+      <div className="relative h-52 md:h-72 rounded-2xl overflow-hidden shadow-card mb-0 md:mb-6">
         {freelancer.cover_url ? (
           <img
             src={freelancer.cover_url}
@@ -142,80 +141,122 @@ export default function FreelancerProfile() {
 
       <div className="">
 
-        {/* ── Hero row ─────────────────────────────────────────── */}
-        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 -mt-12 mb-7 px-2">
+        {/* ── Hero ─────────────────────────────────────────────────────────
+              Mobile:  [avatar] .............. [button]   (top row)
+                        [name · school · badges]            (below, full-width)
+              sm+:     [avatar] [name · school · badges] .. [button]  (one row)
+        ──────────────────────────────────────────────────────────────── */}
+        <div className="-mt-12 px-2 mb-7">
 
-          {/* Avatar + identity */}
-          <div className="flex items-end gap-4">
-            <div className="shrink-0 relative z-10">
-              {freelancer.avatar_url ? (
-                <img
-                  src={freelancer.avatar_url}
-                  alt={freelancer.full_name}
-                  className="w-28 h-28 rounded-full object-cover border-4 border-bg-subtle shadow-elevated"
-                />
-              ) : (
-                <div className="w-28 h-28 rounded-full bg-gradient-to-br from-brand to-brand-ink text-white flex items-center justify-center text-[44px] font-display font-bold border-4 border-bg-subtle shadow-elevated select-none">
-                  {avatarInitial(freelancer.full_name)}
-                </div>
-              )}
-            </div>
-
-            <div className="pb-1 min-w-0">
-              <h1 className="font-display text-fs-h2 text-ink leading-tight">{freelancer.full_name}</h1>
-
-              {/* University line */}
-              {freelancer.university && (
-                <p className="flex items-center gap-1.5 text-fs-small text-ink-muted mt-1">
-                  <GraduationCap size={13} className="text-ink-muted shrink-0" />
-                  <span className="font-medium text-ink-soft">{freelancer.university}</span>
-                  {freelancer.program && <span className="text-ink-muted">· {freelancer.program}</span>}
-                </p>
-              )}
-
-              {/* Badges row */}
-              <div className="flex flex-wrap items-center gap-2 mt-2">
-                {freelancer.year_of_study && (
-                  <span className="inline-flex items-center gap-1 h-6 px-2.5 rounded-full bg-amber-50 border border-amber-200 text-fs-tiny text-amber-700 font-semibold">
-                    <Calendar size={10} />
-                    {ordinal(freelancer.year_of_study)}
-                  </span>
-                )}
-                {categoryLabel && (
-                  <span className="inline-flex items-center gap-1 h-6 px-2.5 rounded-full bg-brand/10 border border-brand/25 text-fs-tiny text-brand font-semibold">
-                    <Briefcase size={10} />
-                    {categoryLabel}
-                  </span>
-                )}
-                {freelancer.created_at && (
-                  <span className="text-fs-tiny text-ink-muted">
-                    Joined {formatDate(freelancer.created_at)}
-                  </span>
+          {/* Top row: avatar (always) + inline identity on sm+ + button */}
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-start gap-4 min-w-0 flex-1">
+              {/* Avatar */}
+              <div className="shrink-0 relative z-10">
+                {freelancer.avatar_url ? (
+                  <img
+                    src={freelancer.avatar_url}
+                    alt={freelancer.full_name}
+                    className="w-28 h-28 rounded-full object-cover border-4 border-bg-subtle shadow-elevated"
+                  />
+                ) : (
+                  <div className="w-28 h-28 rounded-full bg-gradient-to-br from-brand to-brand-ink text-white flex items-center justify-center text-[44px] font-display font-bold border-4 border-bg-subtle shadow-elevated select-none">
+                    {avatarInitial(freelancer.full_name)}
+                  </div>
                 )}
               </div>
+
+              {/* Identity — visible sm+ only (beside avatar) */}
+              <div className="hidden sm:block pt-12 min-w-0 flex-1">
+                <h1 className="font-display text-fs-h2 text-ink leading-tight">{freelancer.full_name}</h1>
+                {(freelancer.university || freelancer.program) && (
+                  <div className="flex flex-col gap-0.5 mt-1">
+                    {freelancer.university && (
+                      <p className="flex items-center gap-1.5">
+                        <GraduationCap size={13} className="text-ink-muted shrink-0" />
+                        <span className="font-semibold text-ink-soft uppercase tracking-wide text-fs-tiny">{freelancer.university}</span>
+                      </p>
+                    )}
+                    {freelancer.program && (
+                      <p className="pl-[21px] uppercase tracking-wide text-fs-tiny text-ink-muted">{freelancer.program}</p>
+                    )}
+                  </div>
+                )}
+                <div className="flex flex-wrap items-center gap-2 mt-2">
+                  {freelancer.year_of_study && (
+                    <span className="inline-flex items-center gap-1 h-6 px-2.5 rounded-full bg-amber-50 border border-amber-200 text-fs-tiny text-amber-700 font-semibold">
+                      <Calendar size={10} />{levelLabel(freelancer.year_of_study)}
+                    </span>
+                  )}
+                  {categoryLabel && (
+                    <span className="inline-flex items-center gap-1 h-6 px-2.5 rounded-full bg-brand/10 border border-brand/25 text-fs-tiny text-brand font-semibold">
+                      <Briefcase size={10} />{categoryLabel}
+                    </span>
+                  )}
+                  {freelancer.created_at && (
+                    <span className="text-fs-tiny text-ink-muted">Joined {formatDate(freelancer.created_at)}</span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Action button */}
+            <div className="pt-12 shrink-0">
+              {isOwnProfile ? (
+                <Link
+                  to="/me/edit"
+                  className="inline-flex items-center gap-2 h-10 px-4 sm:px-5 rounded-input border border-line bg-bg text-ink font-semibold text-fs-small hover:border-ink-soft hover:text-ink transition-colors"
+                >
+                  <Pencil size={15} />
+                  <span className="hidden xs:inline">Edit profile</span>
+                  <span className="xs:hidden">Edit</span>
+                </Link>
+              ) : (
+                <button
+                  onClick={handleContact}
+                  className="inline-flex items-center gap-2 h-10 px-4 sm:px-5 rounded-input bg-brand text-white font-semibold text-fs-small hover:bg-brand-ink transition-colors shadow-glow"
+                >
+                  <MessageCircle size={15} />
+                  <span className="hidden xs:inline">Contact {firstName}</span>
+                  <span className="xs:hidden">Contact</span>
+                </button>
+              )}
             </div>
           </div>
 
-          {/* Action buttons */}
-          <div className="flex items-center gap-2.5 self-end sm:self-end pb-1">
-            {isOwnProfile ? (
-              <Link
-                to="/me/edit"
-                className="inline-flex items-center gap-2 h-10 px-5 rounded-input border border-line bg-bg text-ink font-semibold text-fs-small hover:border-ink-soft hover:text-ink transition-colors"
-              >
-                <Pencil size={15} />
-                Edit profile
-              </Link>
-            ) : (
-              <button
-                onClick={handleContact}
-                className="inline-flex items-center gap-2 h-10 px-5 rounded-input bg-brand text-white font-semibold text-fs-small hover:bg-brand-ink transition-colors shadow-glow"
-              >
-                <MessageCircle size={15} />
-                Contact {firstName}
-              </button>
+          {/* Identity — mobile only (below avatar row) */}
+          <div className="sm:hidden mt-3">
+            <h1 className="font-display text-fs-h2 text-ink leading-tight">{freelancer.full_name}</h1>
+            {(freelancer.university || freelancer.program) && (
+              <div className="flex flex-col gap-0.5 mt-1">
+                {freelancer.university && (
+                  <p className="flex items-center gap-1.5">
+                    <GraduationCap size={13} className="text-ink-muted shrink-0" />
+                    <span className="font-semibold text-ink-soft uppercase tracking-wide text-fs-tiny">{freelancer.university}</span>
+                  </p>
+                )}
+                {freelancer.program && (
+                  <p className="pl-[21px] uppercase tracking-wide text-fs-tiny text-ink-muted">{freelancer.program}</p>
+                )}
+              </div>
             )}
+            <div className="flex flex-wrap items-center gap-2 mt-2">
+              {freelancer.year_of_study && (
+                <span className="inline-flex items-center gap-1 h-6 px-2.5 rounded-full bg-amber-50 border border-amber-200 text-fs-tiny text-amber-700 font-semibold">
+                  <Calendar size={10} />{levelLabel(freelancer.year_of_study)}
+                </span>
+              )}
+              {categoryLabel && (
+                <span className="inline-flex items-center gap-1 h-6 px-2.5 rounded-full bg-brand/10 border border-brand/25 text-fs-tiny text-brand font-semibold">
+                  <Briefcase size={10} />{categoryLabel}
+                </span>
+              )}
+              {freelancer.created_at && (
+                <span className="text-fs-tiny text-ink-muted">Joined {formatDate(freelancer.created_at)}</span>
+              )}
+            </div>
           </div>
+
         </div>
 
         {/* ── Body ─────────────────────────────────────────────── */}
@@ -356,17 +397,9 @@ export default function FreelancerProfile() {
           <div className="space-y-4">
 
             {/* Stats row */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="bg-bg rounded-card border border-line p-4 text-center shadow-card">
-                <p className="font-display text-[28px] leading-none text-ink font-bold">{gigs.length}</p>
-                <p className="text-fs-tiny text-ink-muted mt-1.5 uppercase tracking-wide font-medium">Active gigs</p>
-              </div>
-              <div className="bg-bg rounded-card border border-line p-4 text-center shadow-card">
-                <p className="font-display text-[28px] leading-none text-ink font-bold">
-                  {freelancer.created_at ? new Date(freelancer.created_at).getFullYear() : '—'}
-                </p>
-                <p className="text-fs-tiny text-ink-muted mt-1.5 uppercase tracking-wide font-medium">Member since</p>
-              </div>
+            <div className="bg-bg rounded-card border border-line p-4 text-center shadow-card">
+              <p className="font-display text-fs-h2 leading-none text-ink font-bold">{gigs.length}</p>
+              <p className="text-fs-tiny text-ink-muted mt-1.5 uppercase tracking-wide font-medium">Active gigs</p>
             </div>
 
             {/* Education */}
@@ -383,7 +416,7 @@ export default function FreelancerProfile() {
                       </div>
                       <div>
                         <p className="text-fs-tiny text-ink-muted font-semibold uppercase tracking-wide">University</p>
-                        <p className="text-fs-small text-ink font-medium mt-0.5">{freelancer.university}</p>
+                        <p className="text-fs-small text-ink font-medium mt-0.5 uppercase">{freelancer.university}</p>
                       </div>
                     </div>
                   )}
@@ -394,7 +427,7 @@ export default function FreelancerProfile() {
                       </div>
                       <div>
                         <p className="text-fs-tiny text-ink-muted font-semibold uppercase tracking-wide">Programme</p>
-                        <p className="text-fs-small text-ink font-medium mt-0.5">{freelancer.program}</p>
+                        <p className="text-fs-small text-ink font-medium mt-0.5 uppercase">{freelancer.program}</p>
                       </div>
                     </div>
                   )}
@@ -404,8 +437,8 @@ export default function FreelancerProfile() {
                         <Calendar size={14} />
                       </div>
                       <div>
-                        <p className="text-fs-tiny text-ink-muted font-semibold uppercase tracking-wide">Year of study</p>
-                        <p className="text-fs-small text-ink font-medium mt-0.5">{ordinal(freelancer.year_of_study)}</p>
+                        <p className="text-fs-tiny text-ink-muted font-semibold uppercase tracking-wide">Academic level</p>
+                        <p className="text-fs-small text-ink font-medium mt-0.5 uppercase">{levelLabel(freelancer.year_of_study)}</p>
                       </div>
                     </div>
                   )}
@@ -416,7 +449,7 @@ export default function FreelancerProfile() {
                       </div>
                       <div>
                         <p className="text-fs-tiny text-ink-muted font-semibold uppercase tracking-wide">Specialisation</p>
-                        <p className="text-fs-small text-ink font-medium mt-0.5">{categoryLabel}</p>
+                        <p className="text-fs-small text-ink font-medium mt-0.5 uppercase">{categoryLabel}</p>
                       </div>
                     </div>
                   )}

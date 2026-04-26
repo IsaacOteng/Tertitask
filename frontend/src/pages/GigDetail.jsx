@@ -23,12 +23,8 @@ function formatPrice(pesewas) {
   return `GHS ${(pesewas / 100).toLocaleString('en-GH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
 
-function ordinal(n) {
-  if (!n) return null
-  const s = ['th', 'st', 'nd', 'rd']
-  const v = n % 100
-  return `Year ${n}${s[(v - 20) % 10] || s[v] || s[0]}`
-}
+const LEVEL_MAP = { 1: 'Level 100', 2: 'Level 200', 3: 'Level 300', 4: 'Level 400', 5: 'Completed' }
+function levelLabel(n) { return n ? (LEVEL_MAP[n] || `Level ${n * 100}`) : null }
 
 function formatCategory(slug) {
   if (!slug) return null
@@ -528,20 +524,20 @@ export default function GigDetail() {
                         className="w-16 h-16 rounded-full object-cover shrink-0 border-2 border-line"
                       />
                     ) : (
-                      <div className="w-16 h-16 rounded-full bg-brand text-white flex items-center justify-center font-bold text-fs-h2 font-display shrink-0 border-2 border-line">
+                      <div className="w-16 h-16 rounded-full bg-brand text-white flex items-center justify-center font-bold text-fs-h2 font-display shrink-0 border-2 border-line uppercase">
                         {avatarInitial(owner.full_name)}
                       </div>
                     )}
                     <div className="flex-1 min-w-0">
                       <Link
                         to={`/freelancer/${owner.id}`}
-                        className="font-display text-fs-h3 text-ink hover:text-brand transition-colors inline-flex items-center gap-1.5 group"
+                        className="font-display text-fs-h3 text-ink hover:text-brand transition-colors inline-flex items-center gap-1.5 group capitalize"
                       >
                         {owner.full_name}
                         <ChevronRight size={16} className="text-ink-muted group-hover:text-brand group-hover:translate-x-0.5 transition-all" />
                       </Link>
 
-                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5">
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5 uppercase">
                         {owner.university && (
                           <span className="flex items-center gap-1 text-fs-small text-ink-muted">
                             <GraduationCap size={12} className="shrink-0" />
@@ -560,7 +556,7 @@ export default function GigDetail() {
                         {owner.year_of_study && (
                           <span className="inline-flex items-center h-5 px-2 rounded-full bg-amber-50 border border-amber-100 text-fs-tiny text-amber-700 font-medium">
                             <Calendar size={9} className="mr-1" />
-                            {ordinal(owner.year_of_study)}
+                            {levelLabel(owner.year_of_study)}
                           </span>
                         )}
                         {categoryLabel && (

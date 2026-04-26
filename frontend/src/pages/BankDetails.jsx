@@ -16,6 +16,7 @@ export default function BankDetails() {
   const [selectedBank, setSelectedBank] = useState(null)
   const [showDropdown, setShowDropdown] = useState(false)
   const [accountNumber, setAccountNumber] = useState('')
+  const [momoName, setMomoName] = useState('')
   const [verifiedName, setVerifiedName] = useState(null)
   const [verifyError, setVerifyError] = useState(null)
   const [isVerifying, setIsVerifying] = useState(false)
@@ -47,28 +48,44 @@ export default function BankDetails() {
     setBankQuery('')
     setSelectedBank(null)
     setAccountNumber('')
+    setMomoName('')
     setVerifiedName(null)
     setVerifyError(null)
   }
 
-  async function handleAccountBlur() {
-    if (!selectedBank || accountNumber.length < 10) return
+  async function triggerSave({ number = accountNumber, name = momoName } = {}) {
+    if (!selectedBank || number.length < 10) return
     setVerifiedName(null)
     setVerifyError(null)
     setIsVerifying(true)
     try {
-      const data = await saveMut.mutateAsync({
+      const payload = {
         bank_code: selectedBank.code,
         bank_name: selectedBank.name,
-        account_number: accountNumber,
+        account_number: number,
         account_type: selectedBank.type || 'ghipss',
-      })
+      }
+      if (selectedBank.type === 'mobile_money') {
+        if (!name.trim()) { setIsVerifying(false); return }
+        payload.account_name = name.trim()
+      }
+      const data = await saveMut.mutateAsync(payload)
       setVerifiedName(data.account_name)
     } catch (err) {
-      setVerifyError(err.body?.detail || 'Could not verify. Check the number and try again.')
+      setVerifyError(err.body?.detail || 'Could not verify. Check the details and try again.')
     } finally {
       setIsVerifying(false)
     }
+  }
+
+  async function handleAccountBlur() {
+    if (isMoMo) return  // MoMo waits for name field blur
+    await triggerSave()
+  }
+
+  async function handleMomoNameBlur() {
+    if (!momoName.trim() || accountNumber.length < 10) return
+    await triggerSave({ number: accountNumber, name: momoName })
   }
 
   function handleSave() {
@@ -241,10 +258,35 @@ export default function BankDetails() {
               />
               <p className="text-fs-tiny text-ink-muted mt-1">
                 {isMoMo
-                  ? 'Enter the mobile number registered for MoMo, then click away to verify.'
+                  ? 'Enter the MoMo number.'
                   : 'Enter your account number, then click away to verify.'}
               </p>
             </div>
+
+            {/* MoMo only: account holder name */}
+            {isMoMo && (
+              <div>
+                <label className="block text-fs-small font-semibold text-ink mb-1.5">
+                  Account holder name <span className="text-danger">*</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="Your full name"
+                  value={momoName}
+                  onChange={(e) => {
+                    setMomoName(e.target.value)
+                    setVerifiedName(null)
+                    setVerifyError(null)
+                  }}
+                  onBlur={handleMomoNameBlur}
+                  disabled={!selectedBank || accountNumber.length < 10}
+                  className="w-full h-10 px-3 rounded-input border border-line bg-bg text-fs-small text-ink placeholder:text-ink-muted focus:outline-none focus:border-brand focus:ring-2 focus:ring-brand/15 disabled:opacity-50 disabled:bg-bg-subtle"
+                />
+                <p className="text-fs-tiny text-ink-muted mt-1">
+                  Enter your name then click away to save.
+                </p>
+              </div>
+            )}
 
             {isVerifying && (
               <div className="flex items-center gap-2 text-fs-small text-ink-muted">
@@ -257,7 +299,7 @@ export default function BankDetails() {
               <div className="flex items-start gap-3 rounded-input bg-green-50 border border-green-200 px-4 py-3">
                 <CheckCircle2 size={16} className="text-green-600 shrink-0 mt-0.5" />
                 <div>
-                  <p className="text-fs-tiny text-green-700 font-medium">Verified</p>
+                  <p className="text-fs-tiny text-green-700 font-medium">{isMoMo ? 'Saved' : 'Verified'}</p>
                   <p className="text-fs-small text-green-800 font-semibold">{verifiedName}</p>
                 </div>
               </div>

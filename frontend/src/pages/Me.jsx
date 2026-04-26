@@ -10,6 +10,8 @@ import { useMyJobs } from '../hooks/useJobs'
 import { api } from '../lib/api'
 
 const CONTACT_LABEL = { email: 'Email', phone: 'Phone', either: 'Either' }
+const LEVEL_MAP = { 1: 'Level 100', 2: 'Level 200', 3: 'Level 300', 4: 'Level 400', 5: 'Completed' }
+function levelLabel(n) { return n ? (LEVEL_MAP[n] || `Level ${n * 100}`) : null }
 
 const FREELANCER_LINKS = [
   { label: 'My Gigs',  desc: 'Manage your freelance services', to: '/me/gigs',    icon: LayoutDashboard },
@@ -30,7 +32,7 @@ function Field({ label, value, icon: Icon }) {
         {Icon && <Icon size={11} className="shrink-0" />}
         {label}
       </dt>
-      <dd className="text-fs-body text-ink">{value}</dd>
+      <dd className="text-fs-body text-ink uppercase">{value}</dd>
     </div>
   )
 }
@@ -106,7 +108,7 @@ function CoverBanner({ me, onUploaded }) {
   const hasCover = !!me.cover_url
 
   return (
-    <div ref={containerRef} className="relative h-52 rounded-2xl overflow-hidden group mb-0 shadow-card">
+    <div ref={containerRef} className="relative h-52 md:h-72 rounded-2xl overflow-hidden group mb-0 md:mb-6 shadow-card">
       {/* Image or gradient */}
       {hasCover ? (
         <img
@@ -295,54 +297,97 @@ export default function Me() {
         {/* Cover banner */}
         <CoverBanner me={me} onUploaded={setMe} />
 
-        {/* Avatar + name row */}
-        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 -mt-12 mb-8 px-2">
-          <div className="flex items-end gap-4">
-            <div className="relative shrink-0 z-10">
-              {me.avatar_url ? (
-                <img src={me.avatar_url} alt={me.full_name} className="w-24 h-24 rounded-full object-cover border-4 border-bg-subtle shadow-card" />
-              ) : (
-                <div className="w-24 h-24 rounded-full bg-brand text-white flex items-center justify-center text-fs-h1 font-display font-bold border-4 border-bg-subtle shadow-card">
-                  {initial}
+        {/* Hero
+             Mobile:  [avatar] .............. [buttons]   (top row)
+                      [name · school · badge]              (below, full-width)
+             sm+:     [avatar] [name · school · badge] .. [buttons]
+        */}
+        <div className="-mt-12 px-2 mb-8">
+
+          {/* Top row */}
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-start gap-4 min-w-0 flex-1">
+              {/* Avatar */}
+              <div className="relative shrink-0 z-10">
+                {me.avatar_url ? (
+                  <img src={me.avatar_url} alt={me.full_name} className="w-24 h-24 rounded-full object-cover border-4 border-bg-subtle shadow-card" />
+                ) : (
+                  <div className="w-24 h-24 rounded-full bg-brand text-white flex items-center justify-center text-fs-h1 font-display font-bold border-4 border-bg-subtle shadow-card">
+                    {initial}
+                  </div>
+                )}
+              </div>
+
+              {/* Identity — sm+ only, beside avatar */}
+              <div className="hidden sm:block pt-12 min-w-0 flex-1">
+                <h1 className="font-display text-fs-h2 text-ink leading-tight">{me.full_name || '—'}</h1>
+                {(me.university || me.program) && (
+                  <div className="flex flex-col gap-0.5 mt-1">
+                    {me.university && (
+                      <p className="flex items-center gap-1.5">
+                        <GraduationCap size={13} className="text-ink-muted shrink-0" />
+                        <span className="font-semibold text-ink-soft uppercase tracking-wide text-fs-tiny">{me.university}</span>
+                      </p>
+                    )}
+                    {me.program && (
+                      <p className="pl-[21px] uppercase tracking-wide text-fs-tiny text-ink-muted">{me.program}</p>
+                    )}
+                  </div>
+                )}
+                <div className="flex items-center gap-1.5 mt-2">
+                  <span className={`inline-flex items-center gap-1 text-fs-tiny text-white px-2 py-0.5 rounded-full font-semibold ${isClient ? 'bg-amber-500' : 'bg-brand'}`}>
+                    {isClient ? <Briefcase size={10} /> : <LayoutDashboard size={10} />}
+                    {isClient ? 'Client' : categoryLabel || 'Freelancer'}
+                  </span>
                 </div>
-              )}
-            </div>
-            <div className="pb-1 min-w-0">
-              <h1 className="font-display text-fs-h2 text-ink leading-tight truncate">{me.full_name || '—'}</h1>
-              {me.university && (
-                <p className="text-fs-small text-ink-muted mt-0.5 flex items-center gap-1.5">
-                  <GraduationCap size={13} />
-                  {me.university}{me.program ? ` · ${me.program}` : ''}
-                </p>
-              )}
-              <div className="flex items-center gap-1.5 mt-1.5">
-                <span className={`inline-flex items-center gap-1 text-fs-tiny text-white px-2 py-0.5 rounded-full font-semibold ${
-                  isClient ? 'bg-amber-500' : 'bg-brand'
-                }`}>
-                  {isClient ? <Briefcase size={10} /> : <LayoutDashboard size={10} />}
-                  {isClient ? 'Client' : categoryLabel || 'Freelancer'}
-                </span>
               </div>
             </div>
-          </div>
-          <div className="sm:mb-1 self-start sm:self-end flex items-center gap-2">
-            {isClient && (
+
+            {/* Buttons */}
+            <div className="pt-12 flex items-center gap-2 shrink-0">
+              {isClient && (
+                <Link
+                  to="/jobs/new"
+                  className="inline-flex items-center gap-2 h-9 px-3 sm:px-4 rounded-input bg-brand text-white text-fs-small font-semibold hover:bg-brand-ink transition-colors"
+                >
+                  <PlusCircle size={13} />
+                  <span className="hidden sm:inline">Post task</span>
+                </Link>
+              )}
               <Link
-                to="/jobs/new"
-                className="inline-flex items-center gap-2 h-9 px-4 rounded-input bg-brand text-white text-fs-small font-semibold hover:bg-brand-ink transition-colors"
+                to="/me/edit"
+                className="inline-flex items-center gap-2 h-9 px-3 sm:px-4 rounded-input border border-line bg-bg text-fs-small font-medium text-ink-soft hover:text-ink hover:border-ink-soft transition-colors"
               >
-                <PlusCircle size={13} />
-                Post task
+                <Pencil size={13} />
+                <span className="hidden sm:inline">Edit profile</span>
               </Link>
-            )}
-            <Link
-              to="/me/edit"
-              className="inline-flex items-center gap-2 h-9 px-4 rounded-input border border-line bg-bg text-fs-small font-medium text-ink-soft hover:text-ink hover:border-ink-soft transition-colors"
-            >
-              <Pencil size={13} />
-              Edit profile
-            </Link>
+            </div>
           </div>
+
+          {/* Identity — mobile only, below avatar row */}
+          <div className="sm:hidden mt-3">
+            <h1 className="font-display text-fs-h2 text-ink leading-tight">{me.full_name || '—'}</h1>
+            {(me.university || me.program) && (
+              <div className="flex flex-col gap-0.5 mt-1">
+                {me.university && (
+                  <p className="flex items-center gap-1.5">
+                    <GraduationCap size={13} className="text-ink-muted shrink-0" />
+                    <span className="font-semibold text-ink-soft uppercase tracking-wide text-fs-tiny">{me.university}</span>
+                  </p>
+                )}
+                {me.program && (
+                  <p className="pl-[21px] uppercase tracking-wide text-fs-tiny text-ink-muted">{me.program}</p>
+                )}
+              </div>
+            )}
+            <div className="flex items-center gap-1.5 mt-2">
+              <span className={`inline-flex items-center gap-1 text-fs-tiny text-white px-2 py-0.5 rounded-full font-semibold ${isClient ? 'bg-amber-500' : 'bg-brand'}`}>
+                {isClient ? <Briefcase size={10} /> : <LayoutDashboard size={10} />}
+                {isClient ? 'Client' : categoryLabel || 'Freelancer'}
+              </span>
+            </div>
+          </div>
+
         </div>
 
         <div className="space-y-4 pb-12">
@@ -386,7 +431,7 @@ export default function Me() {
             <dl className="grid grid-cols-1 sm:grid-cols-2 gap-5">
               <Field label="University"       value={me.university}                                icon={GraduationCap} />
               <Field label="Programme"        value={me.program} />
-              {!isClient && <Field label="Year of study" value={me.year_of_study ? `Year ${me.year_of_study}` : null} />}
+              {!isClient && <Field label="Academic level" value={levelLabel(me.year_of_study)} />}
               {!isClient && <Field label="Specialisation" value={categoryLabel} icon={Briefcase} />}
               <Field label="Phone"            value={me.phone}                                   icon={Phone} />
               <Field label="WhatsApp"         value={me.whatsapp}                                icon={MessageCircle} />

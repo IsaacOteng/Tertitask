@@ -6,7 +6,13 @@ import { api } from '../lib/api'
 import { useDocumentTitle } from '../hooks/useDocumentTitle'
 import AvatarUpload from '../components/AvatarUpload'
 
-const YEAR_OPTIONS = [1, 2, 3, 4, 5, 6]
+const YEAR_OPTIONS = [
+  { value: 1, label: 'Level 100' },
+  { value: 2, label: 'Level 200' },
+  { value: 3, label: 'Level 300' },
+  { value: 4, label: 'Level 400' },
+  { value: 5, label: 'Completed' },
+]
 const CONTACT_OPTIONS = [
   { value: 'email', label: 'Email' },
   { value: 'phone', label: 'Phone' },
@@ -169,11 +175,13 @@ export default function EditProfile() {
     api.get('/categories/').then(setCategoryOptions).catch(() => {})
   }, [])
 
+  const [customSkillInput, setCustomSkillInput] = useState('')
+
   function toggleSkill(skill) {
     const selected = form.skills
     if (selected.includes(skill)) {
       setForm({ ...form, skills: selected.filter((s) => s !== skill) })
-    } else if (selected.length < 10) {
+    } else if (selected.length < 15) {
       setForm({ ...form, skills: [...selected, skill] })
     }
   }
@@ -275,7 +283,7 @@ export default function EditProfile() {
                   >
                     <option value="">Select year</option>
                     {YEAR_OPTIONS.map((y) => (
-                      <option key={y} value={y}>Year {y}</option>
+                      <option key={y.value} value={y.value}>{y.label}</option>
                     ))}
                   </Select>
                 </div>
@@ -315,11 +323,11 @@ export default function EditProfile() {
                 </Select>
               </div>
               <div>
-                <FieldLabel hint="Select up to 10 skills that best represent your expertise">Skills (up to 10)</FieldLabel>
+                <FieldLabel hint="Select up to 15 skills that best represent your expertise">Skills (up to 15)</FieldLabel>
                 <div className="flex flex-wrap gap-2 mt-1">
                   {skillOptions.map((skill) => {
                     const isSelected = form.skills.includes(skill)
-                    const atLimit = form.skills.length >= 10 && !isSelected
+                    const atLimit = form.skills.length >= 15 && !isSelected
                     return (
                       <button
                         key={skill}
@@ -339,7 +347,41 @@ export default function EditProfile() {
                     )
                   })}
                 </div>
-                <p className="mt-2 text-fs-tiny text-ink-muted">{form.skills.length}/10 selected</p>
+                <div className="flex gap-2 mt-3">
+                  <input
+                    type="text"
+                    value={customSkillInput}
+                    onChange={(e) => setCustomSkillInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        const trimmed = customSkillInput.trim()
+                        if (trimmed && !form.skills.includes(trimmed) && form.skills.length < 15) {
+                          setForm({ ...form, skills: [...form.skills, trimmed] })
+                          setCustomSkillInput('')
+                        }
+                      }
+                    }}
+                    disabled={form.skills.length >= 15}
+                    placeholder="Add a skill not listed above…"
+                    className="flex-1 h-[38px] px-3 border border-line rounded-input text-fs-small text-ink bg-bg placeholder:text-ink-muted focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand transition disabled:opacity-50"
+                  />
+                  <button
+                    type="button"
+                    disabled={!customSkillInput.trim() || form.skills.length >= 15}
+                    onClick={() => {
+                      const trimmed = customSkillInput.trim()
+                      if (trimmed && !form.skills.includes(trimmed) && form.skills.length < 15) {
+                        setForm({ ...form, skills: [...form.skills, trimmed] })
+                        setCustomSkillInput('')
+                      }
+                    }}
+                    className="h-[38px] px-4 rounded-input bg-brand text-white text-fs-small font-semibold hover:bg-brand-ink transition disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+                  >
+                    Add
+                  </button>
+                </div>
+                <p className="mt-2 text-fs-tiny text-ink-muted">{form.skills.length}/15 selected</p>
               </div>
             </div>
           </div>
