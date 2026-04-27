@@ -32,10 +32,13 @@ export function useMarkNotificationsRead() {
 export function useNotificationSocket(enabled) {
   const qc = useQueryClient()
   const wsRef = useRef(null)
+  const retriesRef = useRef(0)
   const [connected, setConnected] = useState(false)
+  const MAX_RETRIES = 3
 
   const connect = useCallback(async () => {
     if (wsRef.current?.readyState === WebSocket.OPEN) return
+    if (retriesRef.current >= MAX_RETRIES) return
     try {
       const token = await auth.currentUser?.getIdToken()
       if (!token) return
@@ -44,11 +47,13 @@ export function useNotificationSocket(enabled) {
       const ws = new WebSocket(`${base}/ws/notifications/?token=${token}`)
       wsRef.current = ws
 
-      ws.onopen = () => setConnected(true)
+      ws.onopen = () => { setConnected(true); retriesRef.current = 0 }
       ws.onclose = () => {
         setConnected(false)
-        // reconnect after 5 s
-        setTimeout(() => { if (enabled) connect() }, 5000)
+        retriesRef.current += 1
+        if (enabled && retriesRef.current < MAX_RETRIES) {
+          setTimeout(() => connect(), 5000)
+        }
       }
       ws.onmessage = (e) => {
         try {

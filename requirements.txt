@@ -13,3 +13,4 @@ channels==4.3.2
 channels_redis==4.3.0
 daphne==4.2.1
 django-unfold==0.90.0
+whitenoise==6.8.2
