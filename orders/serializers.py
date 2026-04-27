@@ -64,7 +64,8 @@ class OrderSerializer(serializers.ModelSerializer):
             'amount', 'platform_fee', 'freelancer_amount', 'currency',
             'status', 'requirements', 'delivery_days',
             'paid_at', 'delivered_at', 'auto_approve_at',
-            'approved_at', 'clear_at', 'released_at', 'cancelled_at',
+            'approved_at', 'clear_at', 'released_at', 'rejected_at', 'cancelled_at',
+            'refunded_at',
             'created_at', 'delivery', 'dispute',
         ]
         read_only_fields = fields

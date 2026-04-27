@@ -42,6 +42,8 @@ def transition(order, to_status):
             order.approved_at = now
         elif to_status == 'released':
             order.released_at = now
+        elif to_status == 'rejected':
+            order.rejected_at = now
         elif to_status == 'cancelled':
             order.cancelled_at = now
 

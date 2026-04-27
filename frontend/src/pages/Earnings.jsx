@@ -1,8 +1,22 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { TrendingUp, Clock, Wallet, ChevronDown, ChevronUp, ArrowDownToLine } from 'lucide-react'
+import { TrendingUp, Clock, Wallet, ChevronDown, ChevronUp, ArrowDownToLine, AlertCircle } from 'lucide-react'
 import { useEarnings, usePayouts, useBankAccounts, useWithdraw } from '../hooks/useEarnings'
 import { useDocumentTitle } from '../hooks/useDocumentTitle'
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PAYOUTS_ENABLED — set to false until Paystack business registration is done.
+//
+// HOW TO RE-ENABLE WITHDRAWALS:
+//   1. Complete business registration on Paystack dashboard
+//      (paystack.com → Settings → Business Information → upgrade from Starter)
+//   2. Wait for Paystack to verify and enable the Transfers feature
+//   3. Set PAYOUTS_ENABLED = true below
+//   4. Delete the <PayoutsNoticeBanner /> block in the JSX below (search "PayoutsNoticeBanner")
+//   5. Remove the PAYOUTS_ENABLED guard on the Withdraw button (search "!PAYOUTS_ENABLED")
+//   6. Test a small withdrawal end-to-end before announcing to users
+// ─────────────────────────────────────────────────────────────────────────────
+const PAYOUTS_ENABLED = false
 
 const MIN_WITHDRAWAL = 5000 // pesewas = GHS 50
 
@@ -30,6 +44,40 @@ const PAYOUT_STATUS_STYLES = {
   processing: 'bg-blue-50 text-blue-700 border-blue-200',
   success:    'bg-green-50 text-green-700 border-green-200',
   failed:     'bg-red-50 text-danger border-red-200',
+}
+
+// ─── PayoutsNoticeBanner ──────────────────────────────────────────────────────
+// Shown when PAYOUTS_ENABLED = false. Delete this component (and its usage below)
+// once Paystack business registration is complete and transfers are enabled.
+function PayoutsNoticeBanner() {
+  return (
+    <div className="rounded-card border border-amber-200 bg-amber-50 p-4 flex gap-3">
+      <AlertCircle size={18} className="text-amber-600 shrink-0 mt-0.5" />
+      <div className="space-y-1.5">
+        <p className="text-fs-small font-semibold text-amber-800">
+          Withdrawals launching soon — your earnings are safe
+        </p>
+        <p className="text-fs-small text-amber-700">
+          We are completing our business registration to enable direct payouts.
+          Your balance is accumulating normally and will be fully available once we go live.
+        </p>
+        <ul className="text-fs-small text-amber-700 space-y-0.5 list-disc list-inside">
+          <li>
+            <span className="font-medium">Refunds</span> (rejected or cancelled orders) are
+            processed within <span className="font-medium">24 hours</span> — Paystack will credit
+            your original payment method.
+          </li>
+          <li>
+            <span className="font-medium">Withdrawals</span> will be processed within{' '}
+            <span className="font-medium">24 hours</span> once the payout feature goes live.
+          </li>
+        </ul>
+        <p className="text-fs-tiny text-amber-600 pt-0.5">
+          You can still save your bank or mobile money account now so it is ready when withdrawals open.
+        </p>
+      </div>
+    </div>
+  )
 }
 
 function EarningsSkeleton() {
@@ -104,6 +152,9 @@ export default function Earnings() {
 
         <h1 className="font-display text-fs-h2 font-semibold text-ink">Earnings</h1>
 
+        {/* PayoutsNoticeBanner — delete this block once PAYOUTS_ENABLED = true */}
+        {!PAYOUTS_ENABLED && <PayoutsNoticeBanner />}
+
         {/* Stat cards */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {STAT_CARDS.map(({ label, value, hint, icon: Icon, iconBg }) => (
@@ -139,13 +190,16 @@ export default function Earnings() {
               )}
             </div>
             <div className="flex flex-col sm:items-end gap-2">
+              {/* PAYOUTS_ENABLED guard — remove the !PAYOUTS_ENABLED condition and the
+                  disabled/title props added below once transfers are live on Paystack */}
               <button
                 onClick={handleWithdrawOpen}
-                disabled={!canWithdraw}
+                disabled={!canWithdraw || !PAYOUTS_ENABLED}
+                title={!PAYOUTS_ENABLED ? 'Withdrawals coming soon — your balance is safe' : undefined}
                 className="inline-flex items-center gap-2 h-10 px-5 rounded-input bg-brand text-white text-fs-small font-semibold hover:bg-brand-ink transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
               >
                 <ArrowDownToLine size={15} />
-                Withdraw
+                {PAYOUTS_ENABLED ? 'Withdraw' : 'Coming soon'}
               </button>
               <Link to="/earnings/bank" className="text-fs-tiny text-brand hover:underline text-right">
                 {bankAccounts.length === 0 ? 'Add bank account →' : 'Add another account →'}
@@ -262,7 +316,7 @@ export default function Earnings() {
           <div className="bg-bg rounded-card border border-line max-w-sm w-full p-6 shadow-card space-y-5">
             <div>
               <h3 className="text-fs-h3 font-display font-semibold text-ink">Withdraw funds</h3>
-              <p className="text-fs-small text-ink-muted mt-1">Funds go to your selected account.</p>
+              <p className="text-fs-small text-ink-muted mt-1">Funds will arrive in your account within 24 hours.</p>
             </div>
 
             {bankAccounts.length > 1 ? (
@@ -338,7 +392,7 @@ export default function Earnings() {
 
       {withdrawMut.isSuccess && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-ink text-white text-fs-small rounded-card px-5 py-3 shadow-card z-50">
-          Payout requested. We'll email you when it completes.
+          Payout requested. You will receive your funds within 24 hours.
         </div>
       )}
     </div>

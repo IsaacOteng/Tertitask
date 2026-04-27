@@ -107,6 +107,16 @@ export default function BankDetails() {
           </p>
         </div>
 
+        {/* ── Payout coming-soon notice ────────────────────────────────────────
+            Remove this block once PAYOUTS_ENABLED = true in Earnings.jsx and
+            Paystack transfers are live on your registered business account.     */}
+        <div className="rounded-card border border-amber-200 bg-amber-50 px-4 py-3 text-fs-small text-amber-700">
+          <span className="font-semibold text-amber-800">Withdrawals coming soon.</span>{' '}
+          Save your account now so it is ready the moment payouts go live.
+          Once enabled, funds arrive within <span className="font-semibold">24 hours</span>.
+        </div>
+        {/* ── End coming-soon notice ─────────────────────────────────────────── */}
+
         {/* Saved accounts list */}
         {!accountsLoading && hasAccounts && (
           <div className="space-y-2">

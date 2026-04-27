@@ -127,22 +127,44 @@ class DisputeInline(admin.StackedInline):
     verbose_name_plural = 'Dispute'
 
 
+# ── Refund status filter ──────────────────────────────────────────────────────
+
+class RefundedFilter(admin.SimpleListFilter):
+    title = 'refund status'
+    parameter_name = 'refunded'
+
+    def lookups(self, request, model_admin):
+        return [
+            ('yes', 'Refunded'),
+            ('pending', 'Needs refund (cancelled/rejected, no refund record)'),
+        ]
+
+    def queryset(self, request, queryset):
+        if self.value() == 'yes':
+            return queryset.filter(refunded_at__isnull=False)
+        if self.value() == 'pending':
+            # These are the ones admin needs to manually push money back for.
+            return queryset.filter(status__in=['cancelled', 'rejected'], refunded_at__isnull=True)
+        return queryset
+
+
 # ── Order admin ───────────────────────────────────────────────────────────────
 
 @admin.register(Order)
 class OrderAdmin(ModelAdmin):
     list_display = [
         'short_id', 'order_title', 'client_email', 'freelancer_email',
-        'amount_display', 'status_badge', 'created_at',
+        'amount_display', 'status_badge', 'refund_status_display', 'created_at',
     ]
-    list_filter = ['status', 'currency', 'created_at']
+    list_filter = ['status', RefundedFilter, 'currency', 'created_at']
     search_fields = ['client__email', 'freelancer__email', 'paystack_reference', 'id']
     ordering = ['-created_at']
     readonly_fields = [
         'id', 'client', 'freelancer', 'gig', 'offer', 'tier',
         'amount', 'platform_fee', 'freelancer_amount', 'currency',
         'paystack_reference', 'paid_at', 'delivered_at', 'approved_at',
-        'clear_at', 'released_at', 'cancelled_at', 'auto_approve_at', 'created_at',
+        'clear_at', 'released_at', 'rejected_at', 'cancelled_at', 'auto_approve_at',
+        'refunded_at', 'created_at',
         'requirements_display', 'job_context', 'timeline_display', 'quick_actions_display',
     ]
     fieldsets = [
@@ -166,7 +188,8 @@ class OrderAdmin(ModelAdmin):
         ('🕐 All timestamps', {
             'fields': [
                 'created_at', 'paid_at', 'delivered_at', 'approved_at',
-                'auto_approve_at', 'clear_at', 'released_at', 'cancelled_at',
+                'auto_approve_at', 'clear_at', 'released_at', 'rejected_at', 'cancelled_at',
+                'refunded_at',
             ],
             'classes': ['collapse'],
         }),
@@ -208,17 +231,27 @@ class OrderAdmin(ModelAdmin):
         return redirect(reverse('admin:orders_order_change', args=[pk]))
 
     def do_refund_view(self, request, pk):
+        from orders.views import _claim_refund
         try:
             order = Order.objects.get(pk=pk)
+            if not _claim_refund(order):
+                self.message_user(request, 'Refund already issued for this order.', messages.WARNING)
+                return redirect(reverse('admin:orders_order_change', args=[pk]))
             ps.refund(order.paystack_reference)
             transition(order, 'cancelled')
-            self.message_user(request, 'Refund initiated. Order cancelled.', messages.SUCCESS)
+            self.message_user(
+                request,
+                'Refund initiated. Client will receive funds within 24 hours.',
+                messages.SUCCESS,
+            )
         except Exception as e:
-            self.message_user(request, f'Error: {e}', messages.ERROR)
+            # Release the claim so it can be retried if Paystack failed.
+            Order.objects.filter(pk=pk).update(refunded_at=None)
+            self.message_user(request, f'Refund failed: {e}', messages.ERROR)
         return redirect(reverse('admin:orders_order_change', args=[pk]))
 
     def do_resolve_view(self, request, pk, resolution):
-        from orders.views import _do_approve
+        from orders.views import _do_approve, _claim_refund
         try:
             order = Order.objects.get(pk=pk)
             dispute = order.dispute
@@ -227,10 +260,17 @@ class OrderAdmin(ModelAdmin):
                 _do_approve(order)
                 msg = 'Dispute resolved — payment releasing to freelancer.'
             else:
-                ps.refund(order.paystack_reference)
+                if not _claim_refund(order):
+                    self.message_user(request, 'Refund already issued for this order.', messages.WARNING)
+                    return redirect(reverse('admin:orders_order_change', args=[pk]))
+                try:
+                    ps.refund(order.paystack_reference)
+                except Exception as e:
+                    Order.objects.filter(pk=pk).update(refunded_at=None)
+                    raise e
                 with transaction.atomic():
                     transition(order, 'cancelled')
-                msg = 'Dispute resolved — refund initiated to client.'
+                msg = 'Dispute resolved — refund initiated. Client will receive funds within 24 hours.'
             dispute.status = 'resolved'
             dispute.resolution = resolution
             dispute.resolved_at = now
@@ -282,14 +322,29 @@ class OrderAdmin(ModelAdmin):
         )
     status_badge.short_description = 'Status'
 
+    def refund_status_display(self, obj):
+        if obj.refunded_at:
+            return format_html(
+                '<span style="color:#059669;font-size:12px;font-weight:600;">✓ Refunded {}</span>',
+                obj.refunded_at.strftime('%d %b'),
+            )
+        if obj.status in ('cancelled', 'rejected'):
+            # Order is in a terminal refund state but no refund was recorded —
+            # admin needs to push the money back manually via the order detail page.
+            return format_html(
+                '<span style="color:#ef4444;font-size:12px;font-weight:600;">⚠ Needs refund</span>'
+            )
+        return format_html('<span style="color:#9ca3af;font-size:12px;">—</span>')
+    refund_status_display.short_description = 'Refund'
+
     def timeline_display(self, obj):
         steps = [
             ('Payment initiated',  obj.created_at,   True),
             ('Payment confirmed',  obj.paid_at,       bool(obj.paid_at)),
             ('Work delivered',     obj.delivered_at,  bool(obj.delivered_at)),
         ]
-        if obj.status == 'rejected':
-            steps.append(('Delivery rejected', None, True))
+        if obj.status in ('rejected', 'cancelled') and obj.rejected_at:
+            steps.append(('Delivery rejected', obj.rejected_at, True))
         elif obj.status == 'disputed':
             steps.append(('Dispute opened', None, True))
         else:
@@ -399,15 +454,21 @@ class OrderAdmin(ModelAdmin):
 
     @admin.action(description='Refund & cancel selected orders')
     def bulk_refund_cancel(self, request, queryset):
+        from orders.views import _claim_refund
         ok = 0
         for order in queryset.filter(status__in=['funded', 'delivered', 'disputed']):
             try:
+                if not _claim_refund(order):
+                    continue  # already refunded, skip silently
                 ps.refund(order.paystack_reference)
                 transition(order, 'cancelled')
                 ok += 1
             except Exception:
-                pass
-        self.message_user(request, f'{ok} order(s) refunded and cancelled.')
+                Order.objects.filter(pk=order.pk).update(refunded_at=None)
+        self.message_user(
+            request,
+            f'{ok} order(s) refunded and cancelled. Clients will receive funds within 24 hours.',
+        )
 
 
 # ── Dispute admin ─────────────────────────────────────────────────────────────

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { createPortal } from 'react-dom'
-import { CheckCircle2, XCircle, AlertTriangle, Clock, ExternalLink, ChevronRight, Loader2 } from 'lucide-react'
+import { CheckCircle2, XCircle, AlertTriangle, Clock, ExternalLink, ChevronRight, Loader2, RefreshCw } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useOrder, useApproveOrder, useRejectOrder, useDisputeOrder, useFreelancerCancelOrder } from '../hooks/useOrders'
 import OrderStatusBadge from '../components/OrderStatusBadge'
@@ -33,7 +33,8 @@ function RejectModal({ onConfirm, onCancel, busy }) {
       <div className="w-full max-w-sm bg-bg rounded-card border border-line shadow-elevated p-6">
         <h3 className="font-semibold text-fs-body text-ink mb-1">Reject delivery?</h3>
         <p className="text-fs-small text-ink-muted leading-relaxed mb-5">
-          Rejecting will trigger a full refund. This action cannot be undone.
+          Rejecting will trigger a full refund to your original payment method within{' '}
+          <span className="font-semibold text-ink">24 hours</span>. This action cannot be undone.
         </p>
         <div className="flex justify-end gap-3">
           <button onClick={onCancel} disabled={busy} className="h-9 px-4 rounded-input border border-line text-fs-small font-medium text-ink-soft hover:text-ink disabled:opacity-50">
@@ -93,7 +94,8 @@ function FreelancerCancelModal({ onConfirm, onCancel, busy }) {
       <div className="w-full max-w-sm bg-bg rounded-card border border-line shadow-elevated p-6">
         <h3 className="font-semibold text-fs-body text-ink mb-1">Cancel this order?</h3>
         <p className="text-fs-small text-ink-muted leading-relaxed mb-5">
-          This will immediately refund the client in full and cannot be undone.
+          This will refund the client in full within{' '}
+          <span className="font-semibold text-ink">24 hours</span> and cannot be undone.
           Only cancel if you genuinely cannot complete the work.
         </p>
         <div className="flex justify-end gap-3">
@@ -176,6 +178,29 @@ export default function OrderDetail() {
           </div>
           <OrderStatusBadge status={order.status} />
         </div>
+
+        {/* Refund notice — shown to client when order is cancelled or rejected */}
+        {isClient && ['cancelled', 'rejected'].includes(order.status) && (
+          <div className="rounded-card border border-blue-200 bg-blue-50 p-4 flex gap-3">
+            <RefreshCw size={18} className="text-blue-600 shrink-0 mt-0.5" />
+            <div>
+              <p className="text-fs-small font-semibold text-blue-800">
+                Your refund is on its way
+              </p>
+              <p className="text-fs-small text-blue-700 mt-0.5">
+                A full refund of{' '}
+                <span className="font-semibold">{ghsCedi(order.amount)}</span> is being
+                processed back to your original payment method. You will receive it within{' '}
+                <span className="font-semibold">24 hours</span>.
+              </p>
+              {order.refunded_at && (
+                <p className="text-fs-tiny text-blue-600 mt-1.5">
+                  Refund initiated on {fmt(order.refunded_at)}.
+                </p>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Parties */}
         <div className="grid grid-cols-2 gap-3">
@@ -408,8 +433,24 @@ function StatusTimeline({ order }) {
 
   if (['cancelled', 'rejected'].includes(order.status)) {
     return (
-      <div className="bg-bg rounded-card border border-line p-5">
-        <p className="text-fs-small text-danger capitalize">This order was {order.status}.</p>
+      <div className="bg-bg rounded-card border border-line p-5 space-y-1.5">
+        <p className="text-fs-small font-semibold text-danger capitalize">
+          This order was {order.status}.
+        </p>
+        {order.rejected_at && (
+          <p className="text-fs-tiny text-ink-muted">
+            Rejected on {fmt(order.rejected_at)}.
+          </p>
+        )}
+        {order.refunded_at ? (
+          <p className="text-fs-tiny text-ink-muted">
+            Refund initiated on {fmt(order.refunded_at)} — funds arrive within 24 hours.
+          </p>
+        ) : (
+          <p className="text-fs-tiny text-ink-muted">
+            Refund is being processed and will arrive within 24 hours.
+          </p>
+        )}
       </div>
     )
   }
