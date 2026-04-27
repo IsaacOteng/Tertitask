@@ -318,7 +318,7 @@ export default function Me() {
                 )}
               </div>
 
-              {/* Identity — sm+ only, beside avatar */}
+              {/* Identity sm+ only, beside avatar */}
               <div className="hidden sm:block pt-12 min-w-0 flex-1">
                 <h1 className="font-display text-fs-h2 text-ink leading-tight">{me.full_name || '—'}</h1>
                 {(me.university || me.program) && (
@@ -364,7 +364,7 @@ export default function Me() {
             </div>
           </div>
 
-          {/* Identity — mobile only, below avatar row */}
+          {/* Identity mobile only, below avatar row */}
           <div className="sm:hidden mt-3">
             <h1 className="font-display text-fs-h2 text-ink leading-tight">{me.full_name || '—'}</h1>
             {(me.university || me.program) && (
@@ -399,7 +399,7 @@ export default function Me() {
             </div>
           ) : (
             <div className="bg-bg rounded-card border border-dashed border-line p-5 flex items-center justify-between gap-4">
-              <p className="text-fs-body text-ink-muted">No bio yet — {isClient ? 'tell freelancers about your projects.' : 'tell clients what you do.'}</p>
+              <p className="text-fs-body text-ink-muted">No bio yet {isClient ? 'tell freelancers about your projects.' : 'tell clients what you do.'}</p>
               <Link to="/me/edit" className="text-fs-small text-brand hover:underline font-medium shrink-0">Add bio →</Link>
             </div>
           )}

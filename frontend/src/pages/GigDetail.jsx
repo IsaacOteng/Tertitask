@@ -120,7 +120,7 @@ function PricingPanel({ gig, tier, setTier, onOrder, onContact, isSaved, onSave,
                 Redirecting to payment…
               </>
             ) : (
-              `Order Now — ${formatPrice(selectedPrice)}`
+              `Order Now ${formatPrice(selectedPrice)}`
             )}
           </button>
         )}
@@ -228,7 +228,7 @@ function RequirementsModal({ gig, tier, onClose, onSubmit, isSubmitting, orderEr
           </button>
         </div>
 
-        {/* Body — scrollable */}
+        {/* Body scrollable */}
         <div className="p-5 space-y-5 overflow-y-auto">
           <p className="text-fs-small text-ink-soft leading-relaxed">
             Describe exactly what you need. You can also attach reference links and images.
@@ -334,7 +334,7 @@ function RequirementsModal({ gig, tier, onClose, onSubmit, isSubmitting, orderEr
               <span>You pay</span>
               <span>{formatPrice(selectedPrice)}</span>
             </div>
-            <p className="text-[10px] text-ink-muted">The platform fee is deducted from the freelancer's payout — you pay only the listed price.</p>
+            <p className="text-[10px] text-ink-muted">The platform fee is deducted from the freelancer's payout you pay only the listed price.</p>
           </div>
 
           <div className="flex items-center justify-end gap-3 pb-1">
@@ -618,7 +618,7 @@ export default function GigDetail() {
               </div>
             </div>
 
-            {/* What you get — from gig data only */}
+            {/* What you get from gig data only */}
             {gig.what_you_get?.length > 0 && (
               <div className="bg-bg rounded-card border border-line p-5 shadow-card">
                 <h2 className="font-display text-fs-h3 text-ink mb-4">What you get</h2>
@@ -635,7 +635,7 @@ export default function GigDetail() {
               </div>
             )}
 
-            {/* Work samples — portfolio images */}
+            {/* Work samples portfolio images */}
             {gig.portfolio_images?.length > 0 && (
               <div className="bg-bg rounded-card border border-line p-5 shadow-card">
                 <h2 className="font-display text-fs-h3 text-ink mb-4">Work samples</h2>
@@ -779,7 +779,7 @@ export default function GigDetail() {
           >
             {isSubmitting
               ? <><Loader2 size={14} className="animate-spin" /> Processing…</>
-              : `Order — ${formatPrice(tier === 'pro' && gig?.price_pro ? gig.price_pro : gig?.price_basic)}`
+              : `Order ${formatPrice(tier === 'pro' && gig?.price_pro ? gig.price_pro : gig?.price_basic)}`
             }
           </button>
         )}

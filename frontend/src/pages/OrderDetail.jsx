@@ -179,7 +179,7 @@ export default function OrderDetail() {
           <OrderStatusBadge status={order.status} />
         </div>
 
-        {/* Refund notice — shown to client when order is cancelled or rejected */}
+        {/* Refund notice shown to client when order is cancelled or rejected */}
         {isClient && ['cancelled', 'rejected'].includes(order.status) && (
           <div className="rounded-card border border-blue-200 bg-blue-50 p-4 flex gap-3">
             <RefreshCw size={18} className="text-blue-600 shrink-0 mt-0.5" />
@@ -328,7 +328,7 @@ export default function OrderDetail() {
               onClick={() => setShowFreelancerCancel(true)}
               className="w-full h-9 rounded-input border border-line text-fs-small text-ink-muted hover:text-danger hover:border-danger transition-colors"
             >
-              I can't do this job — cancel & refund client
+              I can't do this job cancel & refund client
             </button>
           </div>
         )}
@@ -444,7 +444,7 @@ function StatusTimeline({ order }) {
         )}
         {order.refunded_at ? (
           <p className="text-fs-tiny text-ink-muted">
-            Refund initiated on {fmt(order.refunded_at)} — funds arrive within 24 hours.
+            Refund initiated on {fmt(order.refunded_at)} funds arrive within 24 hours.
           </p>
         ) : (
           <p className="text-fs-tiny text-ink-muted">
@@ -461,7 +461,7 @@ function StatusTimeline({ order }) {
         <h3 className="text-fs-small font-semibold text-ink-soft mb-3">Timeline</h3>
         <div className="flex items-center gap-2 text-fs-small text-orange-600">
           <AlertTriangle size={14} />
-          Under dispute — awaiting admin resolution
+          Under dispute awaiting admin resolution
         </div>
       </div>
     )

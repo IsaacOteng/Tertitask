@@ -39,7 +39,7 @@ const STATS = [
   { value: '100%', label: 'Secured GHS payments', icon: Shield },
 ]
 
-/* Activity feed shown in hero — more honest than fake profile cards */
+/* Activity feed shown in hero more honest than fake profile cards */
 const ACTIVITY_FEED = [
   { icon: CheckCircle, label: 'Logo Design delivered',        meta: 'Ama T. · KNUST',     time: '2 min ago',  color: '#14B866' },
   { icon: Star,        label: '5-star review left',           meta: 'Web Development',     time: '8 min ago',  color: '#f59e0b' },
@@ -168,7 +168,7 @@ export default function Landing() {
             </h1>
 
             <p className="text-white/45 mb-8 max-w-md leading-relaxed" style={{ fontSize: 'clamp(0.95rem, 1.4vw, 1.1rem)' }}>
-              Connect with skilled students across Ghanaian universities — fast, fairly, and on campus.
+              Connect with skilled students across Ghanaian universities fast, fairly, and on campus.
             </p>
 
             {/* Search */}
@@ -405,7 +405,7 @@ export default function Landing() {
                 Turn skills into income
               </h3>
               <p className="text-white/45 text-fs-body leading-relaxed mb-6">
-                Post your first gig in minutes. No upfront fees — you only pay when you earn.
+                Post your first gig in minutes. No upfront fees you only pay when you earn.
               </p>
               <Link
                 to="/me/gigs/new"

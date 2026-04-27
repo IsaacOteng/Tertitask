@@ -407,7 +407,7 @@ export default function GigForm() {
             {isEdit ? 'Edit gig' : 'Post a gig'}
           </h1>
           <p className="text-fs-body text-ink-muted mt-1">
-            Fill in every section — clients read all of it before deciding.
+            Fill in every section clients read all of it before deciding.
           </p>
         </div>
 
@@ -419,7 +419,7 @@ export default function GigForm() {
             <div className="space-y-4">
 
               <div>
-                <FieldLabel required hint="Be specific — good titles include the outcome, not just the task">
+                <FieldLabel required hint="Be specific good titles include the outcome, not just the task">
                   Title <span className="text-ink-muted font-normal ml-1">({form.title.length}/80)</span>
                 </FieldLabel>
                 <input
@@ -555,7 +555,7 @@ export default function GigForm() {
             <SectionHeader
               icon={CheckSquare}
               title="What the client gets"
-              subtitle="List exactly what's included — clients use this to compare gigs and decide."
+              subtitle="List exactly what's included clients use this to compare gigs and decide."
             />
             <WhatYouGet
               features={form.what_you_get}

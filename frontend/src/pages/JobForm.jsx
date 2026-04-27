@@ -256,7 +256,7 @@ export default function JobForm() {
           </p>
 
           <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Image upload — first so it's visually prominent */}
+            {/* Image upload first so it's visually prominent */}
             <ImageUpload value={form.image_url} onChange={(url) => set('image_url', url)} />
 
             {/* Title */}

@@ -18,7 +18,7 @@ export default function PaymentReturn() {
             try {
               await api.patch(`/orders/${id}/requirements/`, { requirements: raw })
             } catch {
-              // best-effort — order still proceeds without requirements
+              // best-effort order still proceeds without requirements
             }
             sessionStorage.removeItem(`req_${id}`)
           }

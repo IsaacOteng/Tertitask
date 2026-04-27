@@ -97,7 +97,7 @@ function RoleSelect({ onSelect }) {
         <div>
           <p className="font-display text-fs-h3 text-ink font-semibold mb-1">I offer services</p>
           <p className="text-fs-small text-ink-muted font-sans leading-relaxed">
-            I'm a student with skills to offer — I want to post gigs and earn from clients.
+            I'm a student with skills to offer I want to post gigs and earn from clients.
           </p>
         </div>
       </button>
@@ -526,7 +526,7 @@ export default function Onboarding() {
         <div className="w-full max-w-lg bg-bg rounded-card shadow-card p-8">
           <h1 className="font-display text-fs-h2 text-ink mb-1">Welcome to TertiTask</h1>
           <p className="font-sans text-fs-body text-ink-soft mb-8">
-            Let's get your account set up — it takes about 2 minutes.
+            Let's get your account set up it takes about 2 minutes.
           </p>
           <RoleSelect onSelect={(r) => setRole(r)} />
         </div>

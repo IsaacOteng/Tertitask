@@ -44,7 +44,7 @@ export default function JobDetail() {
 
   const isOwner = me && job && String(me.id) === String(job.owner?.id)
 
-  // Offers — only fetch when relevant
+  // Offers only fetch when relevant
   const { data: offers = [] } = useJobOffers(isOwner ? id : null)
   const { data: myOffer } = useMyOfferOnJob(!isOwner && user ? id : null)
   const acceptOffer = useAcceptOffer()
@@ -309,8 +309,8 @@ export default function JobDetail() {
                       myOffer.status === 'accepted' ? 'bg-green-50 border-green-200 text-green-700' :
                       'bg-bg-subtle border-line text-ink-muted'
                     }`}>
-                      {myOffer.status === 'pending' && `Offer sent — GHS ${myOffer.price_ghs} · ${myOffer.delivery_days}d`}
-                      {myOffer.status === 'accepted' && 'Offer accepted — check your orders'}
+                      {myOffer.status === 'pending' && `Offer sent GHS ${myOffer.price_ghs} · ${myOffer.delivery_days}d`}
+                      {myOffer.status === 'accepted' && 'Offer accepted check your orders'}
                       {myOffer.status === 'rejected' && 'Offer not selected'}
                       {myOffer.status === 'withdrawn' && 'Offer withdrawn'}
                     </div>
@@ -348,7 +348,7 @@ export default function JobDetail() {
         </div>
       </div>
 
-      {/* Offers panel — visible to job owner only */}
+      {/* Offers panel visible to job owner only */}
       {isOwner && (
         <div className="max-w-content mx-auto px-4 pb-12">
           <h2 className="text-fs-body font-semibold text-ink mb-4">

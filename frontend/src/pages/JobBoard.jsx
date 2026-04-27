@@ -51,7 +51,7 @@ function JobCard({ job }) {
       to={`/jobs/${job.id}`}
       className="group block bg-bg rounded-card border border-line hover:border-brand/40 hover:shadow-card transition-all overflow-hidden"
     >
-      {/* Image — shown when present */}
+      {/* Image shown when present */}
       {job.image_url && (
         <div className="aspect-[16/9] overflow-hidden bg-bg-subtle">
           <img

@@ -79,7 +79,7 @@ function Bubble({ msg }) {
 
   return (
     <div className={`flex items-end gap-1.5 ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
-      {/* Avatar — only for the last message in a received group */}
+      {/* Avatar only for the last message in a received group */}
       <div className="w-7 shrink-0">
         {!isMe && isLast && <Avatar user={sender} size={7} />}
       </div>
@@ -315,7 +315,7 @@ export default function MessageThread() {
         <div className="max-w-2xl mx-auto px-4 py-4 space-y-0.5">
           {annotated.length === 0 ? (
             <p className="text-center text-fs-small text-ink-muted py-16">
-              Say hello — this is the start of your conversation.
+              Say hello this is the start of your conversation.
             </p>
           ) : (
             annotated.map((msg) => (
