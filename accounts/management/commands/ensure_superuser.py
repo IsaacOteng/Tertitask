@@ -15,11 +15,11 @@ class Command(BaseCommand):
             self.stdout.write('SUPERUSER_FIREBASE_UID and SUPERUSER_PASSWORD env vars required — skipping.')
             return
 
-        if User.objects.filter(is_superuser=True).exists():
-            self.stdout.write('Superuser already exists — skipping.')
-            return
-
-        user = User(firebase_uid=uid, email=email, is_staff=True, is_superuser=True)
+        user, created = User.objects.get_or_create(firebase_uid=uid)
+        user.email = email
+        user.is_staff = True
+        user.is_superuser = True
         user.set_password(password)
         user.save()
-        self.stdout.write(f'Superuser created: {email}')
+        action = 'created' if created else 'updated'
+        self.stdout.write(f'Superuser {action}: {email}')
